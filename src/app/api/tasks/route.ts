@@ -71,9 +71,11 @@ let tasks = [
     section: "Tarefas",
     sectionitens: [
       {
-        topic: "Vaga Quinto andar",
+        topic: "A FAZER",
         tasks: [
-          { name: "Teste técnico", startDate: "2025-03-19", endDate: "2025-04-11" }
+          { name: "Teste técnico quinto andar", startDate: "2025-03-19", endDate: "2025-04-11" },
+          { name: "OKR's", startDate: "2025-03-01", endDate: "2025-06-31" },
+          { name: "Faculdade", startDate: "2025-02-01", endDate: "2025-06-20" },
         ]
       }
     ]
