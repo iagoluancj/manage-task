@@ -8,22 +8,13 @@ let tasks = [
       {
         topic: "Análise Orientada a Objetos",
         tasks: [
-          { name: "Avaliação virtual", startDate: "2025-02-03", endDate: "2025-03-03" },
-          { name: "Avaliação virtual", startDate: "2025-02-03", endDate: "2025-03-10" },
-          { name: "Portfólio", startDate: "2025-02-03", endDate: "2025-05-03" },
           { name: "Avaliação virtual", startDate: "2025-06-03", endDate: "2025-06-07" },
           { name: "Avaliação virtual", startDate: "2025-06-03", endDate: "2025-06-07" },
-          { name: "Prova", startDate: "2025-03-08", endDate: "2025-03-15" }
         ]
       },
       {
         topic: "Linguagem Orientada a Objetos",
         tasks: [
-          { name: "Avaliação virtual", startDate: "2025-02-24", endDate: "2025-03-31" },
-          { name: "Avaliação virtual", startDate: "2025-02-24", endDate: "2025-04-07" },
-          { name: "Portfólio", startDate: "2025-02-03", endDate: "2025-05-03" },
-          { name: "Avaliação virtual", startDate: "2025-06-03", endDate: "2025-06-07" },
-          { name: "Avaliação virtual", startDate: "2025-06-03", endDate: "2025-06-07" },
           { name: "Prova", startDate: "2025-03-29", endDate: "2025-04-05" }
         ]
       },
