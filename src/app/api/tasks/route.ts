@@ -25,7 +25,7 @@ type Section = {
 
 type TasksType = Section[];
 
-// Função para salvar os dados no Supabase
+// Função para salvar os dados no Supabasea
 async function saveTasksToDB(newTasks: TasksType) {
   const { error } = await supabase
     .from('json_data')
