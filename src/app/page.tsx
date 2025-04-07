@@ -514,8 +514,9 @@ const NewTopic = styled.div`
 
   select {
     outline: none;
-    border-radius: 15px;
-    background-color: #0a0a0a;
+    padding: 0rem .2rem;
+    border-radius: 15px 15px 0px 0px;
+    border: 1px solid #0070f3;
   }
 `;
 
