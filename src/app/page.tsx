@@ -2,7 +2,7 @@
 
 import styled, { css, keyframes } from "styled-components";
 import { useEffect, useState } from "react";
-import { differenceInDays, differenceInHours, isAfter, isBefore } from "date-fns";
+import { differenceInDays, differenceInHours, isBefore } from "date-fns";
 import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
 import { FaTrash, FaExclamationTriangle, FaClock, FaCheckCircle, FaCalendarAlt } from "react-icons/fa";
 import { FaTasks } from "react-icons/fa";
@@ -23,6 +23,17 @@ interface Topic {
 interface Section {
   section: string;
   sectionitens: Topic[];
+}
+
+interface TaskStatus {
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  status: string;
+  icon: React.ComponentType;
+  label: string;
+  daysText: string;
+  isOverdue?: boolean;
 }
 
 const urgentPulse = keyframes`
@@ -217,7 +228,7 @@ export default function Home() {
       );
       setVisibleSections(initialVisibility);
     }
-  }, [editedTopics]);
+  }, [editedTopics, visibleSections.length]);
 
 
   const handleEditChange = (
@@ -477,10 +488,10 @@ export default function Home() {
             )
           ).flat()}
 
-          {editedTopics.map((sectionData, sectionIndex) =>
-            sectionData.sectionitens.map((topicData, topicIndex) =>
+          {editedTopics.map((sectionData) =>
+            sectionData.sectionitens.map((topicData) =>
               topicData.tasks
-                .map((task, taskIndex) => {
+                .map((task) => {
                   const taskStatus = getTaskStatus(task.startDate, task.endDate);
                   const isPriority = taskStatus.status === 'urgent' ||
                     taskStatus.status === 'overdue' ||
@@ -812,20 +823,6 @@ const Title = styled.h1`
   }
 `;
 
-const Subtitle = styled.p`
-  font-size: 1.125rem;
-  color: #6b7280;
-  margin: 0;
-  font-weight: 500;
-
-  @media (max-width: 768px) {
-    font-size: 1rem;
-  }
-
-  @media (max-width: 480px) {
-    font-size: 0.9rem;
-  }
-`;
 
 const Line = styled.div`
   width: 100%;
@@ -871,7 +868,7 @@ const PriorityTasks = styled.div`
   gap: 0.75rem;
 `;
 
-const PriorityCard = styled.div<{ $taskStatus: any; $isUrgent: boolean }>`
+const PriorityCard = styled.div<{ $taskStatus: TaskStatus; $isUrgent: boolean }>`
   background: ${({ $taskStatus }) => $taskStatus.bgColor};
   border: 2px solid ${({ $taskStatus }) => $taskStatus.borderColor};
   border-radius: 12px;
@@ -1029,14 +1026,6 @@ const NoPriorityTasks = styled.div`
 const TopicTasks = styled.div`
 `;
 
-const TaskText = styled.span<{ $isPastDue: boolean }>`
-  ${({ $isPastDue }) =>
-    $isPastDue &&
-    css`
-      text-decoration: line-through; 
-      color: #999; 
-    `}
-`;
 
 const SaveButton = styled.button`
   display: flex;
@@ -1127,7 +1116,7 @@ const TaskList = styled.ul`
   margin: 1rem 0;
 `;
 
-const TaskCard = styled.div<{ $taskStatus: any; $isUrgent: boolean }>`
+const TaskCard = styled.div<{ $taskStatus: TaskStatus; $isUrgent: boolean }>`
   background: ${({ $taskStatus }) => $taskStatus.bgColor};
   border: 2px solid ${({ $taskStatus }) => $taskStatus.borderColor};
   border-radius: 12px;
@@ -1268,7 +1257,7 @@ const TaskStatus = styled.div`
   }
 `;
 
-const StatusBadge = styled.div<{ $taskStatus: any }>`
+const StatusBadge = styled.div<{ $taskStatus: TaskStatus }>`
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -1284,7 +1273,7 @@ const StatusBadge = styled.div<{ $taskStatus: any }>`
   white-space: nowrap;
 `;
 
-const DaysCounter = styled.div<{ $taskStatus: any }>`
+const DaysCounter = styled.div<{ $taskStatus: TaskStatus }>`
   color: ${({ $taskStatus }) => $taskStatus.color};
   font-weight: 700;
   font-size: 0.75rem;
