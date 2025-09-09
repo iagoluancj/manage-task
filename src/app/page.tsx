@@ -607,14 +607,15 @@ export default function Home() {
                               <DaysCounter $taskStatus={taskStatus}>
                                 {taskStatus.daysText}
                               </DaysCounter>
-                            </TaskStatus>
-                          </TaskContent>
-
+                              
                           <TaskActions>
                             <DeleteButton onClick={() => markTaskForDeletion(sectionIndex, topicIndex, taskIndex)}>
                               <FaTrash />
                             </DeleteButton>
                           </TaskActions>
+                            </TaskStatus>
+                          </TaskContent>
+
                         </TaskCard>
                       );
                     })}
