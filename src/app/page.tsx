@@ -131,8 +131,10 @@ Agendados
   // Ajusta a altura do textarea automaticamente
   useEffect(() => {
     if (editingQuickNotes && textareaRef.current) {
+      const scrollPosition = window.scrollY;
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      window.scrollTo(0, scrollPosition);
     }
   }, [quickNotes, editingQuickNotes]);
 
@@ -1938,10 +1940,17 @@ const QuickNotesTextarea = styled.textarea`
   transition: all 0.3s ease;
   box-sizing: border-box;
   overflow: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 
   &:focus {
     border-color: #22c55e;
     box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+  }
+
+  @media (max-width: 768px) {
+    font-size: 16px; /* Evita zoom no iOS */
+    padding: 1rem;
   }
 `;
 
