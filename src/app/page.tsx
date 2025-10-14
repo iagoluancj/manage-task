@@ -884,12 +884,12 @@ Agendados
                               <DaysCounter $taskStatus={taskStatus}>
                                 {taskStatus.daysText}
                               </DaysCounter>
-                              
-                          <TaskActions>
-                            <DeleteButton onClick={() => markTaskForDeletion(sectionIndex, topicIndex, taskIndex)}>
-                              <FaTrash />
-                            </DeleteButton>
-                          </TaskActions>
+
+                              <TaskActions>
+                                <DeleteButton onClick={() => markTaskForDeletion(sectionIndex, topicIndex, taskIndex)}>
+                                  <FaTrash />
+                                </DeleteButton>
+                              </TaskActions>
                             </TaskStatus>
                           </TaskContent>
 
@@ -1103,6 +1103,7 @@ Agendados
                 onChange={(e) => handleQuickNotesChange(e.target.value)}
                 onBlur={() => setEditingQuickNotes(false)}
                 autoFocus
+                spellCheck={false}
               />
             ) : (
               <QuickNotesDisplay onClick={() => setEditingQuickNotes(true)}>
@@ -1541,8 +1542,7 @@ const RoutineItemContent = styled.div`
   cursor: pointer;
 
   @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.5rem;
   }
 `;
@@ -1823,6 +1823,7 @@ const SaveButton = styled.button`
   border: none;
   border-radius: 20px;
   cursor: pointer;
+  z-index: 1000;
   &:hover {
     background-color: #005bb5;
   }

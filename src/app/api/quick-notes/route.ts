@@ -68,3 +68,4 @@ export async function PUT(req: NextRequest) {
         return NextResponse.json({ error: 'Erro ao atualizar notas' }, { status: 500 });
     }
 }
+
