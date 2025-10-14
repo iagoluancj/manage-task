@@ -1,7 +1,7 @@
 "use client";
 
 import styled, { css, keyframes } from "styled-components";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { differenceInDays, differenceInHours, isBefore } from "date-fns";
 import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
 import { FaTrash, FaExclamationTriangle, FaClock, FaCheckCircle, FaCalendarAlt } from "react-icons/fa";
@@ -93,6 +93,261 @@ export default function Home() {
   const [newEndDate, setNewEndDate] = useState("");
   const [addingTaskIndex, setAddingTaskIndex] = useState<number | null>(null);
   const [pendingDeletions, setPendingDeletions] = useState<{ section: string; topic?: string; task?: string }[]>([]);
+
+  // Estados para rotina
+  const [newRoutineTime, setNewRoutineTime] = useState("");
+  const [newRoutineActivity, setNewRoutineActivity] = useState("");
+  const [isAddingRoutineItem, setIsAddingRoutineItem] = useState(false);
+  const [editingRoutineItem, setEditingRoutineItem] = useState<{ type: string; index: number; field: 'time' | 'activity' } | null>(null);
+  const [editingRoutineValue, setEditingRoutineValue] = useState("");
+
+  // Estados para notas rápidas
+  const [quickNotes, setQuickNotes] = useState(`DE CASA
+- Agendar psiquiatra
+- scrapper acs
+- Angelita: 30796205
+
+A COMPRAR:
+- Bolsa térmica comida
+- Minoxidil 
+- Blusa academia
+- gelatina 
+- Meias
+
+FAZER:
+- foto família
+- orar todo dia
+- olhar casas
+- continuar com backup
+----- fazer backup dos demais arquivos
+
+Agendados
+- 14/10 - 16:00 Fernand`);
+  const [editingQuickNotes, setEditingQuickNotes] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const notesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Ajusta a altura do textarea automaticamente
+  useEffect(() => {
+    if (editingQuickNotes && textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [quickNotes, editingQuickNotes]);
+
+  // Auto-save das notas rápidas
+  const handleQuickNotesChange = (value: string) => {
+    setQuickNotes(value);
+
+    // Limpa o timeout anterior
+    if (notesSaveTimeoutRef.current) {
+      clearTimeout(notesSaveTimeoutRef.current);
+    }
+
+    // Salva após 1 segundo de inatividade
+    notesSaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/quick-notes', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notes: value }),
+        });
+
+        if (res.ok) {
+          toast.success('Notas salvas automaticamente!', { duration: 2000 });
+        }
+      } catch (error) {
+        console.error('Erro ao salvar notas:', error);
+      }
+    }, 1000);
+  };
+
+  // Ordena rotina por horário
+  const sortRoutineByTime = useCallback((routine: typeof workRoutine) => {
+    return [...routine].sort((a, b) => {
+      // Extrai o horário (remove emojis e espaços)
+      const timeA = a.time.replace(/[^\d:]/g, '').replace(':', '');
+      const timeB = b.time.replace(/[^\d:]/g, '').replace(':', '');
+      return parseInt(timeA) - parseInt(timeB);
+    });
+  }, []);
+
+  // Determina se é dia de trabalho ou folga (12x36)
+  const getWorkDayType = () => {
+    const today = new Date();
+    const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000);
+    // Se o dia do ano é par, é dia de trabalho; se ímpar, é folga
+    return dayOfYear % 2 === 0 ? 'work' : 'off';
+  };
+
+  const workDayType = getWorkDayType();
+
+  // Dados da rotina (em um caso real, viriam de um backend ou localStorage)
+  const [workRoutine, setWorkRoutine] = useState([
+    { time: "🕔 05:00", activity: "Acordar" },
+    { time: "🚗 05:30", activity: "Sair de casa" },
+    { time: "🛒 08:00", activity: "Comprar energético (x1) e iogurte (x2 de 170 ml) → Colocar na bolsa térmica e deixar na geladeira" },
+    { time: "🥣 10:30", activity: "Comer iogurte com granola" },
+    { time: "🍛 12:00", activity: "Almoçar" },
+    { time: "⚡ 14:00", activity: "Tomar energético" },
+    { time: "⚡ 15:00", activity: "Olhar tickets novos / Olhar tickets da BRC / Olhar meus tickets / Olhar tickets da fila do eduardo / fazer OKR" },
+    { time: "🥣 17:00", activity: "Comer iogurte com granola" },
+    { time: "🏋️ 19:00", activity: "Ir para a academia" },
+    { time: "🏠 20:30", activity: "Voltar para casa" },
+    { time: "🧼 22:50", activity: "Tomar banho e levar cueca" },
+    { time: "😴 23:00", activity: "Dormir" },
+  ]);
+
+  const [offRoutine, setOffRoutine] = useState([
+    { time: "🕕 06:00", activity: "Acordar e trabalhar até 10:00" },
+    { time: "🎮 10:00–12:00", activity: "Jogar ou descansar" },
+    { time: "🍳 12:00", activity: "Fazer almoço/janta" },
+    { time: "📖 13:00", activity: "Ver algo ou ler" },
+    { time: "🎮 14:00", activity: "Jogar uma partida" },
+    { time: "🏋️ 15:00–16:00", activity: "Ir à academia" },
+    { time: "💻 16:00–19:00", activity: "Trabalhar" },
+    { time: "🍱 19:00–20:00", activity: "Fazer marmita e colocar na bolsa térmica" },
+    { time: "🎮 20:00–21:00", activity: "Jogar mais uma partida" },
+    { time: "📞 21:00–22:00", activity: "Ligar para a Letícia" },
+    { time: "📚 22:00", activity: "Ler algo e dormir" },
+  ]);
+
+
+  const handleAddRoutineItem = async (type: string) => {
+    if (!newRoutineTime || !newRoutineActivity) {
+      toast.error("Preencha horário e atividade!");
+      return;
+    }
+
+    const newItem = { time: newRoutineTime, activity: newRoutineActivity };
+    let updatedRoutine;
+
+    if (type === 'work') {
+      updatedRoutine = sortRoutineByTime([...workRoutine, newItem]);
+      setWorkRoutine(updatedRoutine);
+    } else {
+      updatedRoutine = sortRoutineByTime([...offRoutine, newItem]);
+      setOffRoutine(updatedRoutine);
+    }
+
+    setNewRoutineTime("");
+    setNewRoutineActivity("");
+    setIsAddingRoutineItem(false);
+
+    // Auto-save
+    try {
+      const res = await fetch('/api/routine', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, routine: updatedRoutine }),
+      });
+
+      if (res.ok) {
+        toast.success('Rotina salva automaticamente!', { duration: 2000 });
+      }
+    } catch (error) {
+      console.error('Erro ao salvar rotina:', error);
+    }
+  };
+
+  const handleEditRoutineItem = (type: string, index: number) => {
+    const routine = type === 'work' ? workRoutine : offRoutine;
+    setEditingRoutineValue(routine[index].activity);
+    setEditingRoutineItem({ type, index, field: 'activity' });
+  };
+
+  const handleSaveRoutineEdit = async (type: string, index: number, field: 'time' | 'activity') => {
+    let updatedRoutine;
+
+    if (type === 'work') {
+      const newRoutine = [...workRoutine];
+      newRoutine[index][field] = editingRoutineValue;
+      updatedRoutine = sortRoutineByTime(newRoutine);
+      setWorkRoutine(updatedRoutine);
+    } else {
+      const newRoutine = [...offRoutine];
+      newRoutine[index][field] = editingRoutineValue;
+      updatedRoutine = sortRoutineByTime(newRoutine);
+      setOffRoutine(updatedRoutine);
+    }
+
+    setEditingRoutineItem(null);
+    setEditingRoutineValue("");
+
+    // Auto-save
+    try {
+      const res = await fetch('/api/routine', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, routine: updatedRoutine }),
+      });
+
+      if (res.ok) {
+        toast.success('Rotina salva automaticamente!', { duration: 2000 });
+      }
+    } catch (error) {
+      console.error('Erro ao salvar rotina:', error);
+    }
+  };
+
+  const handleDeleteRoutineItem = async (type: string, index: number) => {
+    let updatedRoutine;
+
+    if (type === 'work') {
+      updatedRoutine = workRoutine.filter((_, i) => i !== index);
+      setWorkRoutine(updatedRoutine);
+    } else {
+      updatedRoutine = offRoutine.filter((_, i) => i !== index);
+      setOffRoutine(updatedRoutine);
+    }
+
+    // Auto-save
+    try {
+      const res = await fetch('/api/routine', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, routine: updatedRoutine }),
+      });
+
+      if (res.ok) {
+        toast.success('Rotina salva automaticamente!', { duration: 2000 });
+      }
+    } catch (error) {
+      console.error('Erro ao salvar rotina:', error);
+    }
+  };
+
+  // Carregar rotinas e notas do banco de dados ao iniciar
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // Carregar rotinas
+        const routineRes = await fetch('/api/routine');
+        const routineData = await routineRes.json();
+
+        if (routineData.work && Array.isArray(routineData.work)) {
+          const sortedWork = sortRoutineByTime(routineData.work);
+          setWorkRoutine(sortedWork);
+        }
+        if (routineData.off && Array.isArray(routineData.off)) {
+          const sortedOff = sortRoutineByTime(routineData.off);
+          setOffRoutine(sortedOff);
+        }
+
+        // Carregar notas rápidas
+        const notesRes = await fetch('/api/quick-notes');
+        const notesData = await notesRes.json();
+
+        if (notesData.notes) {
+          setQuickNotes(notesData.notes);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar dados:', err);
+      }
+    };
+
+    loadData();
+  }, [sortRoutineByTime]);
 
 
   const getTaskStatus = (startDate: string | number | Date, endDate: string | number | Date) => {
@@ -254,7 +509,7 @@ export default function Home() {
 
   const handleSave = async () => {
     try {
-      // Primeiro, salva as edições
+      // Primeiro, salva as edições das tarefas
       const editRes = await fetch("/api/tasks", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -274,6 +529,27 @@ export default function Home() {
         if (!deleteRes.ok) throw new Error(`Erro ao deletar! Status: ${deleteRes.status}`);
       }
 
+      // Salva as rotinas
+      const routineRes = await fetch("/api/routine", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          work: workRoutine,
+          off: offRoutine
+        }),
+      });
+
+      if (!routineRes.ok) throw new Error(`Erro ao salvar rotinas! Status: ${routineRes.status}`);
+
+      // Salva as notas rápidas
+      const notesRes = await fetch("/api/quick-notes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: quickNotes }),
+      });
+
+      if (!notesRes.ok) throw new Error(`Erro ao salvar notas! Status: ${notesRes.status}`);
+
       // Atualiza o estado com os dados editados e limpa a lista de deleções
       setTopics(editedTopics);
       setPendingDeletions([]);
@@ -281,6 +557,7 @@ export default function Home() {
       toast.success("Alterações salvas com sucesso!");
     } catch (error) {
       console.error("Erro ao salvar mudanças:", error);
+      toast.error("Erro ao salvar alterações!");
     }
   };
 
@@ -680,6 +957,164 @@ export default function Home() {
         </NewTopic>
         <NewButton onClick={handleAddNewTask}>Adicionar tópico</NewButton>
       </NewTopicContainer>
+
+
+      {/* Seção de Rotina e Notas Rápidas - Lado a Lado */}
+      <RoutineAndNotesContainer>
+        {/* Rotina */}
+        <RoutineSection>
+          <RoutineHeader>
+            <RoutineTitle>
+              {workDayType === 'work' ? '💼' : '🏖️'} Rotina do Dia
+            </RoutineTitle>
+            <RoutineSubtitle>
+              {workDayType === 'work' ? 'Dia de Trabalho Presencial' : 'Dia de Folga'}
+            </RoutineSubtitle>
+          </RoutineHeader>
+
+          <RoutineContent>
+            {(workDayType === 'work' ? workRoutine : offRoutine).map((item, index) => (
+              <RoutineItem key={index}>
+                {editingRoutineItem?.type === workDayType && editingRoutineItem?.index === index ? (
+                  <>
+                    <RoutineItemContent>
+                      <RoutineInput
+                        type="text"
+                        placeholder="🕐 Horário"
+                        value={item.time}
+                        onChange={async (e) => {
+                          const newRoutine = workDayType === 'work' ? [...workRoutine] : [...offRoutine];
+                          newRoutine[index].time = e.target.value;
+                          const updatedRoutine = sortRoutineByTime(newRoutine);
+
+                          if (workDayType === 'work') {
+                            setWorkRoutine(updatedRoutine);
+                          } else {
+                            setOffRoutine(updatedRoutine);
+                          }
+
+                          // Auto-save
+                          try {
+                            const res = await fetch('/api/routine', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ type: workDayType, routine: updatedRoutine }),
+                            });
+
+                            if (res.ok) {
+                              toast.success('Rotina salva automaticamente!', { duration: 2000 });
+                            }
+                          } catch (error) {
+                            console.error('Erro ao salvar rotina:', error);
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <RoutineInput
+                        type="text"
+                        placeholder="📝 Atividade"
+                        value={editingRoutineValue}
+                        onChange={(e) => setEditingRoutineValue(e.target.value)}
+                      />
+                    </RoutineItemContent>
+                    <RoutineActions>
+                      <RoutineSaveButton onClick={() => handleSaveRoutineEdit(workDayType, index, 'activity')}>
+                        ✓
+                      </RoutineSaveButton>
+                      <RoutineCancelButton onClick={() => {
+                        setEditingRoutineItem(null);
+                        setEditingRoutineValue("");
+                      }}>
+                        ✕
+                      </RoutineCancelButton>
+                    </RoutineActions>
+                  </>
+                ) : (
+                  <>
+                    <RoutineItemContent onClick={() => handleEditRoutineItem(workDayType, index)}>
+                      <RoutineTime>{item.time}</RoutineTime>
+                      <RoutineActivity>{item.activity}</RoutineActivity>
+                    </RoutineItemContent>
+
+                    <RoutineActions>
+                      <RoutineDeleteButton onClick={() => handleDeleteRoutineItem(workDayType, index)}>
+                        🗑️
+                      </RoutineDeleteButton>
+                    </RoutineActions>
+                  </>
+                )}
+              </RoutineItem>
+            ))}
+
+            {isAddingRoutineItem && (
+              <RoutineAddForm>
+                <RoutineItemContent>
+                  <RoutineInput
+                    type="text"
+                    placeholder="🕐 Horário (ex: 08:00)"
+                    value={newRoutineTime}
+                    onChange={(e) => setNewRoutineTime(e.target.value)}
+                    style={{ minWidth: '100px', flexShrink: 0 }}
+                  />
+                  <RoutineInput
+                    type="text"
+                    placeholder="📝 Atividade"
+                    value={newRoutineActivity}
+                    onChange={(e) => setNewRoutineActivity(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                </RoutineItemContent>
+
+                <RoutineAddButtons>
+                  <RoutineSaveButton onClick={() => handleAddRoutineItem(workDayType)}>
+                    ✓
+                  </RoutineSaveButton>
+                  <RoutineCancelButton onClick={() => {
+                    setIsAddingRoutineItem(false);
+                    setNewRoutineTime("");
+                    setNewRoutineActivity("");
+                  }}>
+                    ✕
+                  </RoutineCancelButton>
+                </RoutineAddButtons>
+              </RoutineAddForm>
+            )}
+
+            {!isAddingRoutineItem && (
+              <RoutineAddButton onClick={() => setIsAddingRoutineItem(true)}>
+                + Adicionar Item
+              </RoutineAddButton>
+            )}
+          </RoutineContent>
+        </RoutineSection>
+
+        {/* Notas Rápidas */}
+        <QuickNotesSection>
+          <QuickNotesHeader>
+            <QuickNotesTitle>📝 Notas Rápidas</QuickNotesTitle>
+            <QuickNotesSubtitle>Suas anotações do WhatsApp</QuickNotesSubtitle>
+          </QuickNotesHeader>
+
+          <QuickNotesContent>
+            {editingQuickNotes ? (
+              <QuickNotesTextarea
+                ref={textareaRef}
+                value={quickNotes}
+                onChange={(e) => handleQuickNotesChange(e.target.value)}
+                onBlur={() => setEditingQuickNotes(false)}
+                autoFocus
+              />
+            ) : (
+              <QuickNotesDisplay onClick={() => setEditingQuickNotes(true)}>
+                {quickNotes.split('\n').map((line, index) => (
+                  <div key={index}>{line || ' '}</div>
+                ))}
+              </QuickNotesDisplay>
+            )}
+          </QuickNotesContent>
+        </QuickNotesSection>
+      </RoutineAndNotesContainer>
+
       <Toaster
         position="top-right"
         toastOptions={{
@@ -728,6 +1163,14 @@ const EditableInput = styled.input`
   &:focus {
     border-bottom: 2px solid #1d4ed8;
     background: rgba(59, 130, 246, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    color: #f3f4f6;
+    
+    &:focus {
+      background: rgba(59, 130, 246, 0.2);
+    }
   }
 `;
 
@@ -1021,6 +1464,346 @@ const NoPriorityTasks = styled.div`
     font-size: 1.1rem;
     font-weight: 600;
     color: #059669;
+  }
+`;
+
+const RoutineSection = styled.div`
+  padding: 1.5rem;
+  background: transparent;
+  border-radius: 16px;
+`;
+
+const RoutineHeader = styled.div`
+  text-align: center;
+  margin-bottom: 1.5rem;
+`;
+
+const RoutineTitle = styled.h2`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+`;
+
+const RoutineSubtitle = styled.p`
+  font-size: 0.9rem;
+  color: #64748b;
+  margin: 0;
+  font-weight: 500;
+`;
+
+const RoutineContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const RoutineItem = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .2rem;
+  background: #f0fdf4;
+  border: 2px solid #86efac;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #16a34a, #86efac);
+  }
+`;
+
+const RoutineItemContent = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+`;
+
+const RoutineTime = styled.div`
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #166534;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 100px;
+`;
+
+const RoutineActivity = styled.div`
+  font-size: 0.95rem;
+  color: #1f2937;
+  line-height: 1.5;
+  flex: 1;
+  cursor: pointer;
+  padding: 0.25rem 0;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: rgba(22, 163, 74, 0.05);
+  }
+`;
+
+const RoutineActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+`;
+
+const RoutineDeleteButton = styled.button`
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  padding: 0.2rem 0.25rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+
+  &:hover {
+    background: #ef4444;
+    color: white;
+    opacity: 1;
+  }
+`;
+
+const RoutineAddButton = styled.button`
+  width: 100%;
+  padding: 1rem;
+  background: #16a34a;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 0.5rem;
+
+  &:hover {
+    background: #15803d;
+    transform: translateY(-2px);
+  }
+`;
+
+const RoutineAddForm = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: #1f2937;
+  border: 2px solid #86efac;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #16a34a, #86efac);
+  }
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+`;
+
+const RoutineInput = styled.input`
+  padding: 0.75rem;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.2s ease;
+  color: #c0c0c0;
+  background: #1f2937;
+
+  &::placeholder {
+    color: #6b7280;
+  }
+
+  &:focus {
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+  }
+`;
+
+const RoutineAddButtons = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+`;
+
+const RoutineSaveButton = styled.button`
+  padding: 0.5rem;
+  background: #16a34a;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: #15803d;
+    transform: scale(1.05);
+  }
+`;
+
+const RoutineCancelButton = styled.button`
+  padding: 0.5rem;
+  background: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: #4b5563;
+    transform: scale(1.05);
+  }
+`;
+
+const RoutineAndNotesContainer = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 3rem;
+  margin-bottom: 2rem;
+
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const QuickNotesSection = styled.div`
+  padding: 1.5rem;
+  background: transparent;
+  border-radius: 16px;
+`;
+
+const QuickNotesHeader = styled.div`
+  text-align: center;
+  margin-bottom: 1.5rem;
+`;
+
+const QuickNotesTitle = styled.h2`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+`;
+
+const QuickNotesSubtitle = styled.p`
+  font-size: 0.9rem;
+  color: #64748b;
+  margin: 0;
+  font-weight: 500;
+`;
+
+const QuickNotesContent = styled.div`
+  max-width: 800px;
+  margin: 0 auto;
+`;
+
+const QuickNotesDisplay = styled.div`
+  background: #1f2937;
+  border: 2px solid #374151;
+  border-radius: 12px;
+  padding: 1.5rem;
+  color: #e5e7eb;
+  font-family: 'Courier New', monospace;
+  font-size: 0.95rem;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  height: auto;
+  min-height: auto;
+
+  &:hover {
+    border-color: #4b5563;
+    background: #111827;
+  }
+
+  div {
+    min-height: 1.5rem;
+  }
+`;
+
+const QuickNotesTextarea = styled.textarea`
+  width: 100%;
+  height: auto;
+  min-height: auto;
+  background: #1f2937;
+  border: 2px solid #16a34a;
+  border-radius: 12px;
+  padding: 1.5rem;
+  color: #e5e7eb;
+  font-family: 'Courier New', monospace;
+  font-size: 0.95rem;
+  line-height: 1.8;
+  resize: none;
+  outline: none;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  overflow: hidden;
+
+  &:focus {
+    border-color: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
   }
 `;
 
