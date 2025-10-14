@@ -100,6 +100,8 @@ export default function Home() {
   const [isAddingRoutineItem, setIsAddingRoutineItem] = useState(false);
   const [editingRoutineItem, setEditingRoutineItem] = useState<{ type: string; index: number; field: 'time' | 'activity' } | null>(null);
   const [editingRoutineValue, setEditingRoutineValue] = useState("");
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [lastDate, setLastDate] = useState<string>("");
 
   // Estados para notas rápidas
   const [quickNotes, setQuickNotes] = useState(`DE CASA
@@ -125,7 +127,6 @@ Agendados
 - 14/10 - 16:00 Fernand`);
   const [editingQuickNotes, setEditingQuickNotes] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const notesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Ajusta a altura do textarea automaticamente
   useEffect(() => {
@@ -135,31 +136,23 @@ Agendados
     }
   }, [quickNotes, editingQuickNotes]);
 
-  // Auto-save das notas rápidas
-  const handleQuickNotesChange = (value: string) => {
-    setQuickNotes(value);
+  // Salva as notas ao clicar fora
+  const handleQuickNotesBlur = async () => {
+    setEditingQuickNotes(false);
 
-    // Limpa o timeout anterior
-    if (notesSaveTimeoutRef.current) {
-      clearTimeout(notesSaveTimeoutRef.current);
-    }
+    try {
+      const res = await fetch('/api/quick-notes', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: quickNotes }),
+      });
 
-    // Salva após 1 segundo de inatividade
-    notesSaveTimeoutRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch('/api/quick-notes', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ notes: value }),
-        });
-
-        if (res.ok) {
-          toast.success('Notas salvas automaticamente!', { duration: 2000 });
-        }
-      } catch (error) {
-        console.error('Erro ao salvar notas:', error);
+      if (res.ok) {
+        toast.success('Notas salvas!', { duration: 2000 });
       }
-    }, 1000);
+    } catch (error) {
+      console.error('Erro ao salvar notas:', error);
+    }
   };
 
   // Ordena rotina por horário
@@ -181,6 +174,37 @@ Agendados
   };
 
   const workDayType = getWorkDayType();
+
+  // Função para alternar checkbox e salvar no banco
+  const toggleCheckbox = async (type: string, index: number) => {
+    const key = `${type}-${index}`;
+    const newCheckedItems = new Set(checkedItems);
+
+    if (newCheckedItems.has(key)) {
+      newCheckedItems.delete(key);
+    } else {
+      newCheckedItems.add(key);
+    }
+
+    setCheckedItems(newCheckedItems);
+
+    // Salvar no banco de dados
+    try {
+      const routine = type === 'work' ? workRoutine : offRoutine;
+      const updatedRoutine = routine.map((item, idx) => ({
+        ...item,
+        checked: newCheckedItems.has(`${type}-${idx}`)
+      }));
+
+      await fetch('/api/routine', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, routine: updatedRoutine }),
+      });
+    } catch (error) {
+      console.error('Erro ao salvar checkbox:', error);
+    }
+  };
 
   // Dados da rotina (em um caso real, viriam de um backend ou localStorage)
   const [workRoutine, setWorkRoutine] = useState([
@@ -212,6 +236,47 @@ Agendados
     { time: "📚 22:00", activity: "Ler algo e dormir" },
   ]);
 
+  // Resetar checkboxes ao mudar de dia
+  useEffect(() => {
+    const today = new Date().toLocaleDateString('pt-BR');
+
+    // Se mudou o dia, resetar todos os checks e salvar no banco
+    if (lastDate && lastDate !== today) {
+      setCheckedItems(new Set());
+
+      // Resetar checks no banco de dados
+      const resetRoutineChecks = async () => {
+        try {
+          // Resetar rotina de trabalho
+          const workRoutineReset = workRoutine.map(item => ({ ...item, checked: false }));
+          await fetch('/api/routine', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'work', routine: workRoutineReset }),
+          });
+
+          // Resetar rotina de folga
+          const offRoutineReset = offRoutine.map(item => ({ ...item, checked: false }));
+          await fetch('/api/routine', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'off', routine: offRoutineReset }),
+          });
+
+          // Atualizar estado local
+          setWorkRoutine(workRoutineReset);
+          setOffRoutine(offRoutineReset);
+        } catch (error) {
+          console.error('Erro ao resetar checks:', error);
+        }
+      };
+
+      resetRoutineChecks();
+    }
+
+    setLastDate(today);
+  }, [lastDate, workRoutine, offRoutine]);
+
 
   const handleAddRoutineItem = async (type: string) => {
     if (!newRoutineTime || !newRoutineActivity) {
@@ -219,7 +284,7 @@ Agendados
       return;
     }
 
-    const newItem = { time: newRoutineTime, activity: newRoutineActivity };
+    const newItem = { time: newRoutineTime, activity: newRoutineActivity, checked: false };
     let updatedRoutine;
 
     if (type === 'work') {
@@ -328,10 +393,29 @@ Agendados
         if (routineData.work && Array.isArray(routineData.work)) {
           const sortedWork = sortRoutineByTime(routineData.work);
           setWorkRoutine(sortedWork);
+
+          // Carregar checkboxes da rotina de trabalho
+          const workChecked = new Set<string>();
+          sortedWork.forEach((item: { time: string; activity: string; checked?: boolean }, idx: number) => {
+            if (item.checked) {
+              workChecked.add(`work-${idx}`);
+            }
+          });
+          setCheckedItems(prev => new Set([...prev, ...workChecked]));
         }
+
         if (routineData.off && Array.isArray(routineData.off)) {
           const sortedOff = sortRoutineByTime(routineData.off);
           setOffRoutine(sortedOff);
+
+          // Carregar checkboxes da rotina de folga
+          const offChecked = new Set<string>();
+          sortedOff.forEach((item: { time: string; activity: string; checked?: boolean }, idx: number) => {
+            if (item.checked) {
+              offChecked.add(`off-${idx}`);
+            }
+          });
+          setCheckedItems(prev => new Set([...prev, ...offChecked]));
         }
 
         // Carregar notas rápidas
@@ -1031,9 +1115,19 @@ Agendados
                   </>
                 ) : (
                   <>
+                    <RoutineCheckbox
+                      type="checkbox"
+                      checked={checkedItems.has(`${workDayType}-${index}`)}
+                      onChange={() => toggleCheckbox(workDayType, index)}
+                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    />
                     <RoutineItemContent onClick={() => handleEditRoutineItem(workDayType, index)}>
-                      <RoutineTime>{item.time}</RoutineTime>
-                      <RoutineActivity>{item.activity}</RoutineActivity>
+                      <RoutineTime $checked={checkedItems.has(`${workDayType}-${index}`)}>
+                        {item.time}
+                      </RoutineTime>
+                      <RoutineActivity $checked={checkedItems.has(`${workDayType}-${index}`)}>
+                        {item.activity}
+                      </RoutineActivity>
                     </RoutineItemContent>
 
                     <RoutineActions>
@@ -1100,8 +1194,8 @@ Agendados
               <QuickNotesTextarea
                 ref={textareaRef}
                 value={quickNotes}
-                onChange={(e) => handleQuickNotesChange(e.target.value)}
-                onBlur={() => setEditingQuickNotes(false)}
+                onChange={(e) => setQuickNotes(e.target.value)}
+                onBlur={handleQuickNotesBlur}
                 autoFocus
                 spellCheck={false}
               />
@@ -1507,8 +1601,8 @@ const RoutineItem = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: .2rem;
+  gap: 0.5rem;
+  padding: 0.5rem;
   background: #f0fdf4;
   border: 2px solid #86efac;
   border-radius: 12px;
@@ -1533,41 +1627,67 @@ const RoutineItem = styled.div`
   }
 `;
 
-const RoutineItemContent = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex: 1;
-  min-width: 0;
+const RoutineCheckbox = styled.input`
+  width: 20px;
+  height: 20px;
   cursor: pointer;
+  accent-color: #16a34a;
+  flex-shrink: 0;
+  
+  &:hover {
+    transform: scale(1.1);
+  }
 
   @media (max-width: 768px) {
-    align-items: center;
-    gap: 0.5rem;
+    width: 24px;
+    height: 24px;
   }
 `;
 
-const RoutineTime = styled.div`
+const RoutineItemContent = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+`;
+
+const RoutineTime = styled.div<{ $checked?: boolean }>`
   font-size: 0.9rem;
   font-weight: 700;
-  color: #166534;
+  color: ${props => props.$checked ? '#9ca3af' : '#166534'};
   white-space: nowrap;
   flex-shrink: 0;
   min-width: 100px;
+  text-decoration: ${props => props.$checked ? 'line-through' : 'none'};
+  transition: all 0.3s ease;
+
+  @media (max-width: 768px) {
+    font-size: 0.85rem;
+    min-width: 80px;
+  }
 `;
 
-const RoutineActivity = styled.div`
+const RoutineActivity = styled.div<{ $checked?: boolean }>`
   font-size: 0.95rem;
-  color: #1f2937;
+  color: ${props => props.$checked ? '#9ca3af' : '#1f2937'};
   line-height: 1.5;
   flex: 1;
   cursor: pointer;
   padding: 0.25rem 0;
   border-radius: 4px;
-  transition: background-color 0.2s ease;
+  transition: all 0.3s ease;
+  text-decoration: ${props => props.$checked ? 'line-through' : 'none'};
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 
   &:hover {
     background-color: rgba(22, 163, 74, 0.05);
+  }
+
+  @media (max-width: 768px) {
+    font-size: 0.9rem;
   }
 `;
 
@@ -1618,14 +1738,15 @@ const RoutineAddForm = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem;
+  gap: 0.5rem;
+  padding: 0.75rem;
   background: #1f2937;
   border: 2px solid #86efac;
   border-radius: 12px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   position: relative;
   overflow: hidden;
+  flex-wrap: wrap;
 
   &::before {
     content: '';
@@ -1639,13 +1760,13 @@ const RoutineAddForm = styled.div`
 
   @media (max-width: 768px) {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
+    align-items: stretch;
+    gap: 0.5rem;
   }
 `;
 
 const RoutineInput = styled.input`
-  padding: 0.75rem;
+  padding: 0.5rem;
   border: 2px solid #d1d5db;
   border-radius: 6px;
   font-size: 0.95rem;
@@ -1653,6 +1774,8 @@ const RoutineInput = styled.input`
   transition: all 0.2s ease;
   color: #c0c0c0;
   background: #1f2937;
+  width: 100%;
+  box-sizing: border-box;
 
   &::placeholder {
     color: #6b7280;
@@ -1662,12 +1785,22 @@ const RoutineInput = styled.input`
     border-color: #16a34a;
     box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
   }
+
+  @media (max-width: 768px) {
+    font-size: 16px; /* Evita zoom no iOS */
+    padding: 0.75rem;
+  }
 `;
 
 const RoutineAddButtons = styled.div`
   display: flex;
   gap: 0.5rem;
   flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    justify-content: flex-end;
+  }
 `;
 
 const RoutineSaveButton = styled.button`
