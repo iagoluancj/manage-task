@@ -158,10 +158,15 @@ Agendados
   // Ordena rotina por horário
   const sortRoutineByTime = useCallback((routine: typeof workRoutine) => {
     return [...routine].sort((a, b) => {
-      // Extrai o horário (remove emojis e espaços)
-      const timeA = a.time.replace(/[^\d:]/g, '').replace(':', '');
-      const timeB = b.time.replace(/[^\d:]/g, '').replace(':', '');
-      return parseInt(timeA) - parseInt(timeB);
+      // Extrai apenas o primeiro horário (antes de qualquer traço ou intervalo)
+      const extractTime = (timeStr: string): number => {
+        // Remove emojis e pega apenas o primeiro horário
+        const cleanTime = timeStr.replace(/[^\d:]/g, '').split(/[–-]/)[0];
+        const [hours, minutes = '0'] = cleanTime.split(':');
+        return parseInt(hours) * 100 + parseInt(minutes);
+      };
+
+      return extractTime(a.time) - extractTime(b.time);
     });
   }, []);
 
