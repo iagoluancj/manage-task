@@ -1217,6 +1217,132 @@ Agendados
         </QuickNotesSection>
       </RoutineAndNotesContainer>
 
+      {/* Seção de Cronograma de Remédios para a Cachorra */}
+      <MedicationScheduleSection>
+        <MedicationHeader>
+          <MedicationTitle>🐕 Cronograma de Remédios</MedicationTitle>
+          <MedicationSubtitle>Horários para administração dos medicamentos</MedicationSubtitle>
+        </MedicationHeader>
+
+        <MedicationGrid>
+          {/* Maxicam 0.5mg - 1 comprimido por dia, de 24 em 24h, por 5 dias */}
+          <MedicationCard $color="#3b82f6">
+            <MedicationCardHeader>
+              <MedicationName>Maxicam 0.5mg</MedicationName>
+              <MedicationDosage>1 comprimido por dia (24h)</MedicationDosage>
+            </MedicationCardHeader>
+            <MedicationSchedule>
+              <MedicationDay>
+                <DayLabel>04/11/2025</DayLabel>
+                <TimeSlot>11:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>05/11/2025</DayLabel>
+                <TimeSlot>11:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>06/11/2025</DayLabel>
+                <TimeSlot>11:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>07/11/2025</DayLabel>
+                <TimeSlot>11:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>08/11/2025</DayLabel>
+                <TimeSlot>11:50</TimeSlot>
+              </MedicationDay>
+            </MedicationSchedule>
+          </MedicationCard>
+
+          {/* Lactulose - 1ml de 12 em 12 horas, por 5 dias */}
+          <MedicationCard $color="#10b981">
+            <MedicationCardHeader>
+              <MedicationName>Lactulose</MedicationName>
+              <MedicationDosage>1ml de 12 em 12 horas</MedicationDosage>
+            </MedicationCardHeader>
+            <MedicationSchedule>
+              <MedicationDay>
+                <DayLabel>04/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>05/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>06/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>07/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>08/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+            </MedicationSchedule>
+          </MedicationCard>
+
+          {/* Metronidazol 400mg - 1/2 comprimido de 12 em 12 horas, por 7 dias */}
+          <MedicationCard $color="#f59e0b">
+            <MedicationCardHeader>
+              <MedicationName>Metronidazol (400mg)</MedicationName>
+              <MedicationDosage>1/2 comprimido de 12 em 12 horas</MedicationDosage>
+            </MedicationCardHeader>
+            <MedicationSchedule>
+              <MedicationDay>
+                <DayLabel>04/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>05/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>06/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>07/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>08/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>09/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>10/11/2025</DayLabel>
+                <TimeSlot>11:50 | 23:50</TimeSlot>
+              </MedicationDay>
+            </MedicationSchedule>
+          </MedicationCard>
+
+          {/* Vermipet Plus 660mg - 1 comprimido hoje e outro daqui 15 dias */}
+          <MedicationCard $color="#8b5cf6">
+            <MedicationCardHeader>
+              <MedicationName>Vermipet Plus 660mg</MedicationName>
+              <MedicationDosage>1 comprimido (intervalo de 15 dias)</MedicationDosage>
+            </MedicationCardHeader>
+            <MedicationSchedule>
+              <MedicationDay>
+                <DayLabel>04/11/2025</DayLabel>
+                <TimeSlot>11:50</TimeSlot>
+              </MedicationDay>
+              <MedicationDay>
+                <DayLabel>19/11/2025</DayLabel>
+                <TimeSlot>11:50</TimeSlot>
+              </MedicationDay>
+            </MedicationSchedule>
+          </MedicationCard>
+        </MedicationGrid>
+      </MedicationScheduleSection>
+
       <Toaster
         position="top-right"
         toastOptions={{
@@ -2239,4 +2365,125 @@ const DeleteButton = styled.button`
     background: #dc2626;
     transform: scale(1.05);
   }
+`;
+
+const MedicationScheduleSection = styled.div`
+  margin-top: 3rem;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: transparent;
+  border-radius: 16px;
+`;
+
+const MedicationHeader = styled.div`
+  text-align: center;
+  margin-bottom: 2rem;
+`;
+
+const MedicationTitle = styled.h2`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+`;
+
+const MedicationSubtitle = styled.p`
+  font-size: 0.9rem;
+  color: #64748b;
+  margin: 0;
+  font-weight: 500;
+`;
+
+const MedicationGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const MedicationCard = styled.div<{ $color: string }>`
+  background: #1f2937;
+  border: 2px solid ${props => props.$color};
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, ${props => props.$color}, ${props => props.$color}88);
+  }
+`;
+
+const MedicationCardHeader = styled.div`
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #374151;
+`;
+
+const MedicationName = styled.h3`
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.25rem 0;
+`;
+
+const MedicationDosage = styled.p`
+  font-size: 0.85rem;
+  color: #9ca3af;
+  margin: 0;
+`;
+
+const MedicationSchedule = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const MedicationDay = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: #111827;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #1f2937;
+    border-color: #4b5563;
+  }
+`;
+
+const DayLabel = styled.span`
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e5e7eb;
+`;
+
+const TimeSlot = styled.span`
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #10b981;
+  font-family: 'Courier New', monospace;
 `;
