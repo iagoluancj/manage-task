@@ -4,16 +4,29 @@ import type { NextRequest } from 'next/server';
 const allowedIPs = ['192.168.1.128'];
 
 function normalizeIp(ip: string): string {
-  if (!ip) {
-    return ip;
+  let value = ip.trim();
+
+  if (!value) {
+    return value;
   }
 
-  const withoutPort = ip.includes(':') && ip.includes('.') ? ip.split(':').pop() ?? ip : ip;
-  if (withoutPort?.startsWith('::ffff:')) {
-    return withoutPort.replace('::ffff:', '');
+  if (value.startsWith('[')) {
+    const closingBracketIndex = value.indexOf(']');
+    if (closingBracketIndex !== -1) {
+      value = value.slice(1, closingBracketIndex);
+    }
   }
 
-  return withoutPort ?? ip;
+  if (value.startsWith('::ffff:')) {
+    value = value.replace('::ffff:', '');
+  }
+
+  const lastColonIndex = value.lastIndexOf(':');
+  if (lastColonIndex !== -1 && value.includes('.') && !value.includes('::')) {
+    value = value.slice(0, lastColonIndex);
+  }
+
+  return value;
 }
 
 function extractClientIp(request: NextRequest): string | null {
@@ -43,6 +56,13 @@ function extractClientIp(request: NextRequest): string | null {
 
 export function middleware(request: NextRequest) {
   const clientIp = extractClientIp(request);
+  console.log('[middleware] Verificando IP', {
+    clientIp,
+    forwardedFor: request.headers.get('x-forwarded-for'),
+    realIp: request.headers.get('x-real-ip'),
+    vercelIp: request.headers.get('x-vercel-ip'),
+    cfConnectingIp: request.headers.get('cf-connecting-ip'),
+  });
 
   if (!clientIp || !allowedIPs.includes(clientIp)) {
     return new NextResponse('Acesso não autorizado.', { status: 403 });
