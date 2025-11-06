@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const allowedIPs = ['192.168.1.128', '164.163.69.170'];
+const allowedIPs = ['192.168.1.128', '164.163.69.170', '179.84.138.190'];
 
 function normalizeIp(ip: string): string {
   let value = ip.trim();
