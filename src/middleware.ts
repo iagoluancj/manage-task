@@ -14,7 +14,17 @@ function extractClientIp(request: NextRequest): string | null {
     return realIp;
   }
 
-  return request.geo?.ip ?? null;
+  const vercelIp = request.headers.get('x-vercel-ip');
+  if (vercelIp) {
+    return vercelIp;
+  }
+
+  const cfConnectingIp = request.headers.get('cf-connecting-ip');
+  if (cfConnectingIp) {
+    return cfConnectingIp;
+  }
+
+  return null;
 }
 
 export function middleware(request: NextRequest) {
