@@ -956,7 +956,6 @@ Agendados
                 {isSubmittingLogin ? "Entrando..." : "Entrar"}
               </AuthButton>
             </AuthForm>
-            <AuthHint>login: iago - senha: Asfas852@</AuthHint>
           </AuthCard>
         </AuthContainer>
       );
