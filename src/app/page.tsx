@@ -1613,12 +1613,6 @@ const AuthError = styled.span`
   text-align: left;
 `;
 
-const AuthHint = styled.span`
-  font-size: 0.75rem;
-  color: rgba(226, 232, 240, 0.7);
-  margin-top: -0.75rem;
-`;
-
 const EditableInput = styled.input` 
   outline: none;
   background: transparent;
