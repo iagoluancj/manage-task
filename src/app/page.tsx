@@ -1,7 +1,7 @@
 "use client";
 
 import styled, { css, keyframes } from "styled-components";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, FormEvent } from "react";
 import { differenceInDays, differenceInHours, isBefore } from "date-fns";
 import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
 import { FaTrash, FaExclamationTriangle, FaClock, FaCheckCircle, FaCalendarAlt } from "react-icons/fa";
@@ -103,6 +103,13 @@ export default function Home() {
   const [addingTaskIndex, setAddingTaskIndex] = useState<number | null>(null);
   const [pendingDeletions, setPendingDeletions] = useState<{ section: string; topic?: string; task?: string }[]>([]);
 
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [loginInput, setLoginInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
+
   // Estados para rotina
   const [newRoutineTime, setNewRoutineTime] = useState("");
   const [newRoutineActivity, setNewRoutineActivity] = useState("");
@@ -111,6 +118,88 @@ export default function Home() {
   const [editingRoutineValue, setEditingRoutineValue] = useState("");
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [lastDate, setLastDate] = useState<string>("");
+
+  const verifySession = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        setIsAuthenticated(false);
+        return false;
+      }
+
+      const data = await response.json();
+      const authenticated = Boolean(data?.authenticated);
+      setIsAuthenticated(authenticated);
+      return authenticated;
+    } catch (error) {
+      console.error("Erro ao verificar sessão:", error);
+      setIsAuthenticated(false);
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const initializeAuth = async () => {
+      await verifySession();
+      setIsAuthLoading(false);
+    };
+
+    initializeAuth();
+  }, [verifySession]);
+
+  const handleLogin = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      if (isSubmittingLogin) {
+        return;
+      }
+
+      if (!loginInput.trim() || !passwordInput) {
+        setLoginError("Informe login e senha.");
+        return;
+      }
+
+      setLoginError(null);
+      setIsSubmittingLogin(true);
+
+      try {
+        const response = await fetch("/api/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            login: loginInput.trim(),
+            senha: passwordInput,
+          }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          setLoginError(data?.message ?? "Credenciais inválidas.");
+          setIsAuthenticated(false);
+          return;
+        }
+
+        await verifySession();
+        setIsAuthLoading(false);
+        setLoginInput("");
+        setPasswordInput("");
+        toast.success("Login realizado com sucesso!");
+      } catch (error) {
+        console.error("Erro ao efetuar login:", error);
+        setLoginError("Não foi possível realizar o login. Tente novamente.");
+      } finally {
+        setIsSubmittingLogin(false);
+      }
+    },
+    [isSubmittingLogin, loginInput, passwordInput, verifySession]
+  );
 
   // Estados para notas rápidas
   const [quickNotes, setQuickNotes] = useState(`DE CASA
@@ -427,6 +516,10 @@ Agendados
 
   // Carregar rotinas e notas do banco de dados ao iniciar
   useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
     const loadData = async () => {
       try {
         // Carregar rotinas
@@ -482,7 +575,7 @@ Agendados
     };
 
     loadData();
-  }, [sortRoutineByTime]);
+  }, [isAuthenticated, sortRoutineByTime]);
 
   // Funções para controle financeiro
   const handleTransactionInput = async (value: string) => {
@@ -751,15 +844,19 @@ Agendados
     }
   };
 
-  useEffect(() => {
-    fetch("/api/tasks")
-      .then((res) => res.json())
-      .then((data) => {
-        setTopics(data);
-        setEditedTopics(JSON.parse(JSON.stringify(data)));
-      })
-      .catch((err) => console.error("Erro ao buscar tarefas:", err));
-  }, []);
+    useEffect(() => {
+      if (!isAuthenticated) {
+        return;
+      }
+
+      fetch("/api/tasks")
+        .then((res) => res.json())
+        .then((data) => {
+          setTopics(data);
+          setEditedTopics(JSON.parse(JSON.stringify(data)));
+        })
+        .catch((err) => console.error("Erro ao buscar tarefas:", err));
+    }, [isAuthenticated]);
 
   useEffect(() => {
     if (editedTopics.length > 0 && visibleSections.length === 0) {
@@ -987,12 +1084,83 @@ Agendados
     setPendingDeletions([...pendingDeletions, { section: section.section, topic }]);
   };
 
+    const toastElement = (
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
+            duration: 3000,
+            iconTheme: {
+              primary: '#4ade80',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 4000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+    );
 
+    if (isAuthLoading) {
+      return (
+        <AuthContainer>
+          {toastElement}
+          <AuthCard>
+            <AuthTitle>Verificando sessão...</AuthTitle>
+            <AuthSubtitle>Aguarde um instante enquanto confirmamos suas credenciais.</AuthSubtitle>
+          </AuthCard>
+        </AuthContainer>
+      );
+    }
 
+    if (!isAuthenticated) {
+      return (
+        <AuthContainer>
+          {toastElement}
+          <AuthCard>
+            <AuthTitle>Bem-vindo</AuthTitle>
+            <AuthSubtitle>Acesse para visualizar suas rotinas e tarefas.</AuthSubtitle>
+            <AuthForm onSubmit={handleLogin}>
+              <AuthInput
+                type="text"
+                placeholder="Usuário"
+                value={loginInput}
+                onChange={(event) => setLoginInput(event.target.value)}
+                autoComplete="username"
+                disabled={isSubmittingLogin}
+              />
+              <AuthInput
+                type="password"
+                placeholder="Senha"
+                value={passwordInput}
+                onChange={(event) => setPasswordInput(event.target.value)}
+                autoComplete="current-password"
+                disabled={isSubmittingLogin}
+              />
+              {loginError && <AuthError>{loginError}</AuthError>}
+              <AuthButton type="submit" disabled={isSubmittingLogin}>
+                {isSubmittingLogin ? "Entrando..." : "Entrar"}
+              </AuthButton>
+            </AuthForm>
+          </AuthCard>
+        </AuthContainer>
+      );
+    }
 
-  return (
-    <Container>
-      <Header>
+    return (
+      <Container>
+        {toastElement}
+        <Header>
         <Title className="flex items-center gap-4"><FaTasks size={30} /> <span>Manage Tasks</span></Title>
       </Header>
       <Line />
@@ -1672,31 +1840,6 @@ Agendados
           </MedicationCard>
         </MedicationGrid>
       </MedicationScheduleSection>
-
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: '#363636',
-            color: '#fff',
-          },
-          success: {
-            duration: 3000,
-            iconTheme: {
-              primary: '#4ade80',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            duration: 4000,
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#fff',
-            },
-          },
-        }}
-      />
     </Container>
 
   );
@@ -1705,6 +1848,100 @@ Agendados
 interface SectionContainerProps {
   $isVisible: boolean;
 }
+
+const AuthContainer = styled.div`
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, #0f172a 0%, #1f2937 50%, #111827 100%);
+`;
+
+const AuthCard = styled.div`
+  width: 100%;
+  max-width: 380px;
+  background: rgba(17, 24, 39, 0.9);
+  border-radius: 20px;
+  padding: 2.25rem 2rem;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  text-align: center;
+`;
+
+const AuthTitle = styled.h1`
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0;
+`;
+
+const AuthSubtitle = styled.p`
+  font-size: 0.95rem;
+  color: #cbd5f5;
+  margin: 0 auto;
+  max-width: 260px;
+  line-height: 1.5;
+`;
+
+const AuthForm = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const AuthInput = styled.input`
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+const AuthButton = styled.button`
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  color: #f8fafc;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.35);
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+`;
+
+const AuthError = styled.span`
+  color: #fca5a5;
+  font-size: 0.85rem;
+  text-align: left;
+`;
 
 const EditableInput = styled.input` 
   outline: none;
