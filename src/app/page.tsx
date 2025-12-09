@@ -36,6 +36,15 @@ interface TaskStatus {
   isOverdue?: boolean;
 }
 
+interface Transaction {
+  id?: string;
+  description: string;
+  amount: number;
+  type: 'income' | 'expense';
+  created_at?: string;
+  category?: string;
+}
+
 const urgentPulse = keyframes`
   0% { 
     background: linear-gradient(135deg, #fef2f2 0%, #fecaca 30%, #fef2f2 100%);
@@ -128,6 +137,14 @@ Agendados
   const [editingQuickNotes, setEditingQuickNotes] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // Estados para controle financeiro
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [newTransaction, setNewTransaction] = useState("");
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const transactionInputRef = useRef<HTMLInputElement | null>(null);
+
   // Ajusta a altura do textarea automaticamente
   useEffect(() => {
     if (editingQuickNotes && textareaRef.current) {
@@ -137,6 +154,25 @@ Agendados
       window.scrollTo(0, scrollPosition);
     }
   }, [quickNotes, editingQuickNotes]);
+
+  // Fechar autocomplete ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const inputContainer = document.querySelector('[data-finance-input-container]');
+      
+      if (inputContainer && !inputContainer.contains(target)) {
+        setShowAutocomplete(false);
+      }
+    };
+
+    if (showAutocomplete) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showAutocomplete]);
 
   // Salva as notas ao clicar fora
   const handleQuickNotesBlur = async () => {
@@ -432,6 +468,14 @@ Agendados
         if (notesData.notes) {
           setQuickNotes(notesData.notes);
         }
+
+        // Carregar transações
+        const transactionsRes = await fetch('/api/transactions');
+        const transactionsData = await transactionsRes.json();
+
+        if (transactionsData.transactions) {
+          setTransactions(transactionsData.transactions);
+        }
       } catch (err) {
         console.error('Erro ao carregar dados:', err);
       }
@@ -439,6 +483,158 @@ Agendados
 
     loadData();
   }, [sortRoutineByTime]);
+
+  // Funções para controle financeiro
+  const handleTransactionInput = async (value: string) => {
+    setNewTransaction(value);
+    setSelectedSuggestionIndex(-1);
+    
+    // Buscar sugestões de autocomplete
+    // Busca quando há pelo menos 2 caracteres antes do "|" ou se não há "|" ainda
+    if (value.length >= 2) {
+      const hasPipe = value.includes('|');
+      const description = hasPipe ? value.split('|')[0] : value;
+      
+      if (description.trim().length >= 2) {
+        try {
+          const res = await fetch(`/api/transactions/autocomplete?q=${encodeURIComponent(description.trim())}`);
+          const data = await res.json();
+          setAutocompleteSuggestions(data.suggestions || []);
+          setShowAutocomplete(data.suggestions && data.suggestions.length > 0);
+        } catch (error) {
+          console.error('Erro ao buscar sugestões:', error);
+          setShowAutocomplete(false);
+          setAutocompleteSuggestions([]);
+        }
+      } else {
+        setShowAutocomplete(false);
+        setAutocompleteSuggestions([]);
+      }
+    } else {
+      setShowAutocomplete(false);
+      setAutocompleteSuggestions([]);
+    }
+  };
+
+  const handleSelectSuggestion = (suggestion: string) => {
+    const currentValue = newTransaction;
+    const hasPipe = currentValue.includes('|');
+    const [description, amount] = currentValue.split('|');
+    
+    // Se já tem "|", mantém o valor após o "|", senão adiciona "|"
+    const newValue = hasPipe 
+      ? suggestion + '|' + (amount || '')
+      : suggestion + '|';
+    
+    setNewTransaction(newValue);
+    setShowAutocomplete(false);
+    setAutocompleteSuggestions([]);
+    setSelectedSuggestionIndex(-1);
+    
+    // Foca no input e move o cursor para depois do "|"
+    setTimeout(() => {
+      transactionInputRef.current?.focus();
+      if (transactionInputRef.current) {
+        const cursorPos = newValue.indexOf('|') + 1;
+        transactionInputRef.current.setSelectionRange(cursorPos, cursorPos);
+      }
+    }, 0);
+  };
+
+  const handleAddTransaction = async () => {
+    if (!newTransaction.trim()) {
+      toast.error("Preencha a transação!");
+      return;
+    }
+
+    // Parse do formato: "descrição|valor" ou "descrição|+valor" ou "descrição|-valor"
+    const parts = newTransaction.split('|');
+    if (parts.length !== 2) {
+      toast.error("Formato inválido! Use: descrição|valor (ex: uber|-33,23 ou Salario|+2759,00)");
+      return;
+    }
+
+    const description = parts[0].trim();
+    let amountStr = parts[1].trim();
+    
+    // Verifica se tem sinal explícito
+    const isNegative = amountStr.startsWith('-');
+    const hasPositiveSign = amountStr.startsWith('+');
+    
+    // Remove o sinal para fazer o parse
+    if (isNegative || hasPositiveSign) {
+      amountStr = amountStr.substring(1).trim();
+    }
+    
+    // Converte vírgula para ponto
+    const amount = parseFloat(amountStr.replace(',', '.'));
+
+    if (isNaN(amount) || amount === 0) {
+      toast.error("Valor inválido!");
+      return;
+    }
+
+    // Determina o tipo: se tem sinal negativo, é saída (expense), senão é entrada (income)
+    const type = isNegative ? 'expense' : 'income';
+
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description,
+          amount: Math.abs(amount),
+          type
+        }),
+      });
+
+      if (res.ok) {
+        const newTransactionData = await res.json();
+        setTransactions([newTransactionData, ...transactions]);
+        setNewTransaction("");
+        setShowAutocomplete(false);
+        setAutocompleteSuggestions([]);
+        setSelectedSuggestionIndex(-1);
+        toast.success('Transação adicionada!', { duration: 2000 });
+      } else {
+        toast.error('Erro ao adicionar transação!');
+      }
+    } catch (error) {
+      console.error('Erro ao adicionar transação:', error);
+      toast.error('Erro ao adicionar transação!');
+    }
+  };
+
+  const handleDeleteTransaction = async (id: string) => {
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+
+      if (res.ok) {
+        setTransactions(transactions.filter(t => t.id !== id));
+        toast.success('Transação removida!', { duration: 2000 });
+      } else {
+        toast.error('Erro ao remover transação!');
+      }
+    } catch (error) {
+      console.error('Erro ao remover transação:', error);
+      toast.error('Erro ao remover transação!');
+    }
+  };
+
+  // Calcular totais
+  const totalIncome = transactions
+    .filter(t => t.type === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalExpense = transactions
+    .filter(t => t.type === 'expense')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const netAmount = totalIncome - totalExpense;
 
 
   const getTaskStatus = (startDate: string | number | Date, endDate: string | number | Date) => {
@@ -876,6 +1072,140 @@ Agendados
           )}
         </PriorityTasks>
       </PrioritySection>
+
+      <Line />
+
+      {/* Seção de Controle Financeiro */}
+      <FinanceSection>
+        <FinanceHeader>
+          <FinanceTitle>💰 Controle Financeiro</FinanceTitle>
+          <FinanceSubtitle>Gerencie suas entradas e saídas</FinanceSubtitle>
+        </FinanceHeader>
+
+        {/* Cards de Resumo */}
+        <FinanceCards>
+          <FinanceCard $type="expense">
+            <FinanceCardIcon>📉</FinanceCardIcon>
+            <FinanceCardContent>
+              <FinanceCardLabel>Total de Saídas</FinanceCardLabel>
+              <FinanceCardValue>
+                R$ {totalExpense.toFixed(2).replace('.', ',')}
+              </FinanceCardValue>
+            </FinanceCardContent>
+          </FinanceCard>
+
+          <FinanceCard $type="income">
+            <FinanceCardIcon>📈</FinanceCardIcon>
+            <FinanceCardContent>
+              <FinanceCardLabel>Total de Entradas</FinanceCardLabel>
+              <FinanceCardValue>
+                R$ {totalIncome.toFixed(2).replace('.', ',')}
+              </FinanceCardValue>
+            </FinanceCardContent>
+          </FinanceCard>
+
+          <FinanceCard $type={netAmount >= 0 ? "income" : "expense"}>
+            <FinanceCardIcon>{netAmount >= 0 ? "✅" : "⚠️"}</FinanceCardIcon>
+            <FinanceCardContent>
+              <FinanceCardLabel>Líquido Atual</FinanceCardLabel>
+              <FinanceCardValue>
+                R$ {netAmount.toFixed(2).replace('.', ',')}
+              </FinanceCardValue>
+            </FinanceCardContent>
+          </FinanceCard>
+        </FinanceCards>
+
+        {/* Formulário de Inserção */}
+        <FinanceForm>
+          <FinanceInputContainer data-finance-input-container>
+            <FinanceInput
+              ref={transactionInputRef}
+              type="text"
+              placeholder="Ex: uber|-33,23 ou Salario|+2759,00"
+              value={newTransaction}
+              onChange={(e) => handleTransactionInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (showAutocomplete && selectedSuggestionIndex >= 0 && autocompleteSuggestions[selectedSuggestionIndex]) {
+                    handleSelectSuggestion(autocompleteSuggestions[selectedSuggestionIndex]);
+                  } else {
+                    handleAddTransaction();
+                  }
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setSelectedSuggestionIndex(prev => 
+                    prev < autocompleteSuggestions.length - 1 ? prev + 1 : prev
+                  );
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+                } else if (e.key === 'Escape') {
+                  setShowAutocomplete(false);
+                  setSelectedSuggestionIndex(-1);
+                }
+              }}
+              onFocus={() => {
+                if (autocompleteSuggestions.length > 0) {
+                  setShowAutocomplete(true);
+                }
+              }}
+            />
+            {showAutocomplete && autocompleteSuggestions.length > 0 && (
+              <AutocompleteDropdown>
+                {autocompleteSuggestions.map((suggestion, index) => (
+                  <AutocompleteItem
+                    key={index}
+                    $isSelected={index === selectedSuggestionIndex}
+                    onClick={() => handleSelectSuggestion(suggestion)}
+                    onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                  >
+                    {suggestion}
+                  </AutocompleteItem>
+                ))}
+              </AutocompleteDropdown>
+            )}
+          </FinanceInputContainer>
+          <FinanceButton onClick={handleAddTransaction}>
+            Adicionar
+          </FinanceButton>
+        </FinanceForm>
+
+        {/* Lista de Transações */}
+        <TransactionsList>
+          {transactions.length === 0 ? (
+            <NoTransactions>
+              <span>Nenhuma transação registrada ainda</span>
+              <span>Adicione uma transação usando o formato: descrição|valor</span>
+            </NoTransactions>
+          ) : (
+            transactions.map((transaction) => (
+              <TransactionItem key={transaction.id} $type={transaction.type}>
+                <TransactionInfo>
+                  <TransactionDescription>{transaction.description}</TransactionDescription>
+                  <TransactionDate>
+                    {transaction.created_at
+                      ? new Date(transaction.created_at).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      : ''}
+                  </TransactionDate>
+                </TransactionInfo>
+                <TransactionAmount $type={transaction.type}>
+                  {transaction.type === 'income' ? '+' : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
+                </TransactionAmount>
+                <DeleteTransactionButton onClick={() => transaction.id && handleDeleteTransaction(transaction.id)}>
+                  <FaTrash />
+                </DeleteTransactionButton>
+              </TransactionItem>
+            ))
+          )}
+        </TransactionsList>
+      </FinanceSection>
 
       <Line />
       <Main>
@@ -2486,4 +2816,287 @@ const TimeSlot = styled.span`
   font-weight: 700;
   color: #10b981;
   font-family: 'Courier New', monospace;
+`;
+
+// Estilos para Controle Financeiro
+const FinanceSection = styled.div`
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: transparent;
+  border-radius: 16px;
+`;
+
+const FinanceHeader = styled.div`
+  text-align: center;
+  margin-bottom: 1.5rem;
+`;
+
+const FinanceTitle = styled.h2`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+`;
+
+const FinanceSubtitle = styled.p`
+  font-size: 0.9rem;
+  color: #64748b;
+  margin: 0;
+  font-weight: 500;
+`;
+
+const FinanceCards = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const FinanceCard = styled.div<{ $type: 'income' | 'expense' }>`
+  background: ${props => props.$type === 'income' ? '#f0fdf4' : '#fef2f2'};
+  border: 2px solid ${props => props.$type === 'income' ? '#86efac' : '#fca5a5'};
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, 
+      ${props => props.$type === 'income' ? '#16a34a' : '#dc2626'}, 
+      ${props => props.$type === 'income' ? '#86efac' : '#fca5a5'});
+  }
+`;
+
+const FinanceCardIcon = styled.div`
+  font-size: 2rem;
+  flex-shrink: 0;
+`;
+
+const FinanceCardContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+`;
+
+const FinanceCardLabel = styled.span`
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+`;
+
+const FinanceCardValue = styled.span`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  font-family: 'Courier New', monospace;
+`;
+
+const FinanceForm = styled.div`
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  position: relative;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
+`;
+
+const FinanceInputContainer = styled.div`
+  position: relative;
+  flex: 1;
+`;
+
+const FinanceInput = styled.input`
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #374151;
+  border-radius: 8px;
+  background: #1f2937;
+  color: #e5e7eb;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+
+  &::placeholder {
+    color: #6b7280;
+  }
+
+  &:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  @media (max-width: 768px) {
+    font-size: 16px; /* Evita zoom no iOS */
+  }
+`;
+
+const AutocompleteDropdown = styled.div`
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #1f2937;
+  border: 2px solid #374151;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+`;
+
+const AutocompleteItem = styled.div<{ $isSelected: boolean }>`
+  padding: 0.75rem 1rem;
+  color: #e5e7eb;
+  cursor: pointer;
+  background: ${props => props.$isSelected ? '#374151' : 'transparent'};
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: #374151;
+  }
+
+  &:first-child {
+    border-top: 1px solid #374151;
+  }
+`;
+
+const FinanceButton = styled.button`
+  padding: 0.75rem 2rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &:hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+  }
+
+  @media (max-width: 768px) {
+    width: 100%;
+  }
+`;
+
+const TransactionsList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const TransactionItem = styled.div<{ $type: 'income' | 'expense' }>`
+  background: #1f2937;
+  border: 2px solid ${props => props.$type === 'income' ? '#86efac' : '#fca5a5'};
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+`;
+
+const TransactionInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+`;
+
+const TransactionDescription = styled.span`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e5e7eb;
+  word-wrap: break-word;
+`;
+
+const TransactionDate = styled.span`
+  font-size: 0.8rem;
+  color: #9ca3af;
+`;
+
+const TransactionAmount = styled.span<{ $type: 'income' | 'expense' }>`
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: ${props => props.$type === 'income' ? '#86efac' : '#fca5a5'};
+  font-family: 'Courier New', monospace;
+  white-space: nowrap;
+`;
+
+const DeleteTransactionButton = styled.button`
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  &:hover {
+    background: #ef4444;
+    color: white;
+  }
+`;
+
+const NoTransactions = styled.div`
+  text-align: center;
+  padding: 3rem;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  span:first-child {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #9ca3af;
+  }
+
+  span:last-child {
+    font-size: 0.9rem;
+    color: #6b7280;
+  }
 `;
