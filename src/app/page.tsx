@@ -249,7 +249,7 @@ Agendados
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       const inputContainer = document.querySelector('[data-finance-input-container]');
-      
+
       if (inputContainer && !inputContainer.contains(target)) {
         setShowAutocomplete(false);
       }
@@ -581,13 +581,13 @@ Agendados
   const handleTransactionInput = async (value: string) => {
     setNewTransaction(value);
     setSelectedSuggestionIndex(-1);
-    
+
     // Buscar sugestões de autocomplete
     // Busca quando há pelo menos 2 caracteres antes do "|" ou se não há "|" ainda
     if (value.length >= 2) {
       const hasPipe = value.includes('|');
       const description = hasPipe ? value.split('|')[0] : value;
-      
+
       if (description.trim().length >= 2) {
         try {
           const res = await fetch(`/api/transactions/autocomplete?q=${encodeURIComponent(description.trim())}`);
@@ -612,18 +612,18 @@ Agendados
   const handleSelectSuggestion = (suggestion: string) => {
     const currentValue = newTransaction;
     const hasPipe = currentValue.includes('|');
-    const [description, amount] = currentValue.split('|');
-    
+    const [, amount] = currentValue.split('|');
+
     // Se já tem "|", mantém o valor após o "|", senão adiciona "|"
-    const newValue = hasPipe 
+    const newValue = hasPipe
       ? suggestion + '|' + (amount || '')
       : suggestion + '|';
-    
+
     setNewTransaction(newValue);
     setShowAutocomplete(false);
     setAutocompleteSuggestions([]);
     setSelectedSuggestionIndex(-1);
-    
+
     // Foca no input e move o cursor para depois do "|"
     setTimeout(() => {
       transactionInputRef.current?.focus();
@@ -649,16 +649,16 @@ Agendados
 
     const description = parts[0].trim();
     let amountStr = parts[1].trim();
-    
+
     // Verifica se tem sinal explícito
     const isNegative = amountStr.startsWith('-');
     const hasPositiveSign = amountStr.startsWith('+');
-    
+
     // Remove o sinal para fazer o parse
     if (isNegative || hasPositiveSign) {
       amountStr = amountStr.substring(1).trim();
     }
-    
+
     // Converte vírgula para ponto
     const amount = parseFloat(amountStr.replace(',', '.'));
 
@@ -844,19 +844,19 @@ Agendados
     }
   };
 
-    useEffect(() => {
-      if (!isAuthenticated) {
-        return;
-      }
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
 
-      fetch("/api/tasks")
-        .then((res) => res.json())
-        .then((data) => {
-          setTopics(data);
-          setEditedTopics(JSON.parse(JSON.stringify(data)));
-        })
-        .catch((err) => console.error("Erro ao buscar tarefas:", err));
-    }, [isAuthenticated]);
+    fetch("/api/tasks")
+      .then((res) => res.json())
+      .then((data) => {
+        setTopics(data);
+        setEditedTopics(JSON.parse(JSON.stringify(data)));
+      })
+      .catch((err) => console.error("Erro ao buscar tarefas:", err));
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (editedTopics.length > 0 && visibleSections.length === 0) {
@@ -1084,83 +1084,83 @@ Agendados
     setPendingDeletions([...pendingDeletions, { section: section.section, topic }]);
   };
 
-    const toastElement = (
-      <Toaster
-        position="top-right"
-        toastOptions={{
+  const toastElement = (
+    <Toaster
+      position="top-right"
+      toastOptions={{
+        duration: 4000,
+        style: {
+          background: '#363636',
+          color: '#fff',
+        },
+        success: {
+          duration: 3000,
+          iconTheme: {
+            primary: '#4ade80',
+            secondary: '#fff',
+          },
+        },
+        error: {
           duration: 4000,
-          style: {
-            background: '#363636',
-            color: '#fff',
+          iconTheme: {
+            primary: '#ef4444',
+            secondary: '#fff',
           },
-          success: {
-            duration: 3000,
-            iconTheme: {
-              primary: '#4ade80',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            duration: 4000,
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#fff',
-            },
-          },
-        }}
-      />
-    );
+        },
+      }}
+    />
+  );
 
-    if (isAuthLoading) {
-      return (
-        <AuthContainer>
-          {toastElement}
-          <AuthCard>
-            <AuthTitle>Verificando sessão...</AuthTitle>
-            <AuthSubtitle>Aguarde um instante enquanto confirmamos suas credenciais.</AuthSubtitle>
-          </AuthCard>
-        </AuthContainer>
-      );
-    }
-
-    if (!isAuthenticated) {
-      return (
-        <AuthContainer>
-          {toastElement}
-          <AuthCard>
-            <AuthTitle>Bem-vindo</AuthTitle>
-            <AuthSubtitle>Acesse para visualizar suas rotinas e tarefas.</AuthSubtitle>
-            <AuthForm onSubmit={handleLogin}>
-              <AuthInput
-                type="text"
-                placeholder="Usuário"
-                value={loginInput}
-                onChange={(event) => setLoginInput(event.target.value)}
-                autoComplete="username"
-                disabled={isSubmittingLogin}
-              />
-              <AuthInput
-                type="password"
-                placeholder="Senha"
-                value={passwordInput}
-                onChange={(event) => setPasswordInput(event.target.value)}
-                autoComplete="current-password"
-                disabled={isSubmittingLogin}
-              />
-              {loginError && <AuthError>{loginError}</AuthError>}
-              <AuthButton type="submit" disabled={isSubmittingLogin}>
-                {isSubmittingLogin ? "Entrando..." : "Entrar"}
-              </AuthButton>
-            </AuthForm>
-          </AuthCard>
-        </AuthContainer>
-      );
-    }
-
+  if (isAuthLoading) {
     return (
-      <Container>
+      <AuthContainer>
         {toastElement}
-        <Header>
+        <AuthCard>
+          <AuthTitle>Verificando sessão...</AuthTitle>
+          <AuthSubtitle>Aguarde um instante enquanto confirmamos suas credenciais.</AuthSubtitle>
+        </AuthCard>
+      </AuthContainer>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <AuthContainer>
+        {toastElement}
+        <AuthCard>
+          <AuthTitle>Bem-vindo</AuthTitle>
+          <AuthSubtitle>Acesse para visualizar suas rotinas e tarefas.</AuthSubtitle>
+          <AuthForm onSubmit={handleLogin}>
+            <AuthInput
+              type="text"
+              placeholder="Usuário"
+              value={loginInput}
+              onChange={(event) => setLoginInput(event.target.value)}
+              autoComplete="username"
+              disabled={isSubmittingLogin}
+            />
+            <AuthInput
+              type="password"
+              placeholder="Senha"
+              value={passwordInput}
+              onChange={(event) => setPasswordInput(event.target.value)}
+              autoComplete="current-password"
+              disabled={isSubmittingLogin}
+            />
+            {loginError && <AuthError>{loginError}</AuthError>}
+            <AuthButton type="submit" disabled={isSubmittingLogin}>
+              {isSubmittingLogin ? "Entrando..." : "Entrar"}
+            </AuthButton>
+          </AuthForm>
+        </AuthCard>
+      </AuthContainer>
+    );
+  }
+
+  return (
+    <Container>
+      {toastElement}
+      <Header>
         <Title className="flex items-center gap-4"><FaTasks size={30} /> <span>Manage Tasks</span></Title>
       </Header>
       <Line />
@@ -1240,140 +1240,6 @@ Agendados
           )}
         </PriorityTasks>
       </PrioritySection>
-
-      <Line />
-
-      {/* Seção de Controle Financeiro */}
-      <FinanceSection>
-        <FinanceHeader>
-          <FinanceTitle>💰 Controle Financeiro</FinanceTitle>
-          <FinanceSubtitle>Gerencie suas entradas e saídas</FinanceSubtitle>
-        </FinanceHeader>
-
-        {/* Cards de Resumo */}
-        <FinanceCards>
-          <FinanceCard $type="expense">
-            <FinanceCardIcon>📉</FinanceCardIcon>
-            <FinanceCardContent>
-              <FinanceCardLabel>Total de Saídas</FinanceCardLabel>
-              <FinanceCardValue>
-                R$ {totalExpense.toFixed(2).replace('.', ',')}
-              </FinanceCardValue>
-            </FinanceCardContent>
-          </FinanceCard>
-
-          <FinanceCard $type="income">
-            <FinanceCardIcon>📈</FinanceCardIcon>
-            <FinanceCardContent>
-              <FinanceCardLabel>Total de Entradas</FinanceCardLabel>
-              <FinanceCardValue>
-                R$ {totalIncome.toFixed(2).replace('.', ',')}
-              </FinanceCardValue>
-            </FinanceCardContent>
-          </FinanceCard>
-
-          <FinanceCard $type={netAmount >= 0 ? "income" : "expense"}>
-            <FinanceCardIcon>{netAmount >= 0 ? "✅" : "⚠️"}</FinanceCardIcon>
-            <FinanceCardContent>
-              <FinanceCardLabel>Líquido Atual</FinanceCardLabel>
-              <FinanceCardValue>
-                R$ {netAmount.toFixed(2).replace('.', ',')}
-              </FinanceCardValue>
-            </FinanceCardContent>
-          </FinanceCard>
-        </FinanceCards>
-
-        {/* Formulário de Inserção */}
-        <FinanceForm>
-          <FinanceInputContainer data-finance-input-container>
-            <FinanceInput
-              ref={transactionInputRef}
-              type="text"
-              placeholder="Ex: uber|-33,23 ou Salario|+2759,00"
-              value={newTransaction}
-              onChange={(e) => handleTransactionInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  if (showAutocomplete && selectedSuggestionIndex >= 0 && autocompleteSuggestions[selectedSuggestionIndex]) {
-                    handleSelectSuggestion(autocompleteSuggestions[selectedSuggestionIndex]);
-                  } else {
-                    handleAddTransaction();
-                  }
-                } else if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  setSelectedSuggestionIndex(prev => 
-                    prev < autocompleteSuggestions.length - 1 ? prev + 1 : prev
-                  );
-                } else if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
-                } else if (e.key === 'Escape') {
-                  setShowAutocomplete(false);
-                  setSelectedSuggestionIndex(-1);
-                }
-              }}
-              onFocus={() => {
-                if (autocompleteSuggestions.length > 0) {
-                  setShowAutocomplete(true);
-                }
-              }}
-            />
-            {showAutocomplete && autocompleteSuggestions.length > 0 && (
-              <AutocompleteDropdown>
-                {autocompleteSuggestions.map((suggestion, index) => (
-                  <AutocompleteItem
-                    key={index}
-                    $isSelected={index === selectedSuggestionIndex}
-                    onClick={() => handleSelectSuggestion(suggestion)}
-                    onMouseEnter={() => setSelectedSuggestionIndex(index)}
-                  >
-                    {suggestion}
-                  </AutocompleteItem>
-                ))}
-              </AutocompleteDropdown>
-            )}
-          </FinanceInputContainer>
-          <FinanceButton onClick={handleAddTransaction}>
-            Adicionar
-          </FinanceButton>
-        </FinanceForm>
-
-        {/* Lista de Transações */}
-        <TransactionsList>
-          {transactions.length === 0 ? (
-            <NoTransactions>
-              <span>Nenhuma transação registrada ainda</span>
-              <span>Adicione uma transação usando o formato: descrição|valor</span>
-            </NoTransactions>
-          ) : (
-            transactions.map((transaction) => (
-              <TransactionItem key={transaction.id} $type={transaction.type}>
-                <TransactionInfo>
-                  <TransactionDescription>{transaction.description}</TransactionDescription>
-                  <TransactionDate>
-                    {transaction.created_at
-                      ? new Date(transaction.created_at).toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })
-                      : ''}
-                  </TransactionDate>
-                </TransactionInfo>
-                <TransactionAmount $type={transaction.type}>
-                  {transaction.type === 'income' ? '+' : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
-                </TransactionAmount>
-                <DeleteTransactionButton onClick={() => transaction.id && handleDeleteTransaction(transaction.id)}>
-                  <FaTrash />
-                </DeleteTransactionButton>
-              </TransactionItem>
-            ))
-          )}
-        </TransactionsList>
-      </FinanceSection>
 
       <Line />
       <Main>
@@ -1715,131 +1581,140 @@ Agendados
         </QuickNotesSection>
       </RoutineAndNotesContainer>
 
-      {/* Seção de Cronograma de Remédios para a Cachorra */}
-      <MedicationScheduleSection>
-        <MedicationHeader>
-          <MedicationTitle>🐕 Cronograma de Remédios</MedicationTitle>
-          <MedicationSubtitle>Horários para administração dos medicamentos</MedicationSubtitle>
-        </MedicationHeader>
+      <Line />
 
-        <MedicationGrid>
-          {/* Maxicam 0.5mg - 1 comprimido por dia, de 24 em 24h, por 5 dias */}
-          <MedicationCard $color="#3b82f6">
-            <MedicationCardHeader>
-              <MedicationName>Maxicam 0.5mg</MedicationName>
-              <MedicationDosage>1 comprimido por dia (24h)</MedicationDosage>
-            </MedicationCardHeader>
-            <MedicationSchedule>
-              <MedicationDay>
-                <DayLabel>04/11/2025</DayLabel>
-                <TimeSlot>11:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>05/11/2025</DayLabel>
-                <TimeSlot>11:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>06/11/2025</DayLabel>
-                <TimeSlot>11:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>07/11/2025</DayLabel>
-                <TimeSlot>11:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>08/11/2025</DayLabel>
-                <TimeSlot>11:50</TimeSlot>
-              </MedicationDay>
-            </MedicationSchedule>
-          </MedicationCard>
+      {/* Seção de Controle Financeiro */}
+      <FinanceSection>
+        <FinanceHeader>
+          <FinanceTitle>💰 Controle Financeiro</FinanceTitle>
+          <FinanceSubtitle>Gerencie suas entradas e saídas</FinanceSubtitle>
+        </FinanceHeader>
 
-          {/* Lactulose - 1ml de 12 em 12 horas, por 5 dias */}
-          <MedicationCard $color="#10b981">
-            <MedicationCardHeader>
-              <MedicationName>Lactulose</MedicationName>
-              <MedicationDosage>1ml de 12 em 12 horas</MedicationDosage>
-            </MedicationCardHeader>
-            <MedicationSchedule>
-              <MedicationDay>
-                <DayLabel>04/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>05/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>06/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>07/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>08/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-            </MedicationSchedule>
-          </MedicationCard>
+        {/* Cards de Resumo */}
+        <FinanceCards>
+          <FinanceCard $type="expense">
+            <FinanceCardIcon>📉</FinanceCardIcon>
+            <FinanceCardContent>
+              <FinanceCardLabel>Total de Saídas</FinanceCardLabel>
+              <FinanceCardValue>
+                R$ {totalExpense.toFixed(2).replace('.', ',')}
+              </FinanceCardValue>
+            </FinanceCardContent>
+          </FinanceCard>
 
-          {/* Metronidazol 400mg - 1/2 comprimido de 12 em 12 horas, por 7 dias */}
-          <MedicationCard $color="#f59e0b">
-            <MedicationCardHeader>
-              <MedicationName>Metronidazol (400mg)</MedicationName>
-              <MedicationDosage>1/2 comprimido de 12 em 12 horas</MedicationDosage>
-            </MedicationCardHeader>
-            <MedicationSchedule>
-              <MedicationDay>
-                <DayLabel>04/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>05/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>06/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>07/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>08/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>09/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>10/11/2025</DayLabel>
-                <TimeSlot>11:50 | 23:50</TimeSlot>
-              </MedicationDay>
-            </MedicationSchedule>
-          </MedicationCard>
+          <FinanceCard $type="income">
+            <FinanceCardIcon>📈</FinanceCardIcon>
+            <FinanceCardContent>
+              <FinanceCardLabel>Total de Entradas</FinanceCardLabel>
+              <FinanceCardValue>
+                R$ {totalIncome.toFixed(2).replace('.', ',')}
+              </FinanceCardValue>
+            </FinanceCardContent>
+          </FinanceCard>
 
-          {/* Vermipet Plus 660mg - 1 comprimido hoje e outro daqui 15 dias */}
-          <MedicationCard $color="#8b5cf6">
-            <MedicationCardHeader>
-              <MedicationName>Vermipet Plus 660mg</MedicationName>
-              <MedicationDosage>1 comprimido (intervalo de 15 dias)</MedicationDosage>
-            </MedicationCardHeader>
-            <MedicationSchedule>
-              <MedicationDay>
-                <DayLabel>04/11/2025</DayLabel>
-                <TimeSlot>11:50</TimeSlot>
-              </MedicationDay>
-              <MedicationDay>
-                <DayLabel>19/11/2025</DayLabel>
-                <TimeSlot>11:50</TimeSlot>
-              </MedicationDay>
-            </MedicationSchedule>
-          </MedicationCard>
-        </MedicationGrid>
-      </MedicationScheduleSection>
+          <FinanceCard $type={netAmount >= 0 ? "income" : "expense"}>
+            <FinanceCardIcon>{netAmount >= 0 ? "✅" : "⚠️"}</FinanceCardIcon>
+            <FinanceCardContent>
+              <FinanceCardLabel>Líquido Atual</FinanceCardLabel>
+              <FinanceCardValue>
+                R$ {netAmount.toFixed(2).replace('.', ',')}
+              </FinanceCardValue>
+            </FinanceCardContent>
+          </FinanceCard>
+        </FinanceCards>
+
+        {/* Formulário de Inserção */}
+        <FinanceForm>
+          <FinanceInputContainer data-finance-input-container>
+            <FinanceInput
+              ref={transactionInputRef}
+              type="text"
+              placeholder="Ex: uber|-33,23 ou Salario|+2759,00"
+              value={newTransaction}
+              onChange={(e) => handleTransactionInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (showAutocomplete && selectedSuggestionIndex >= 0 && autocompleteSuggestions[selectedSuggestionIndex]) {
+                    handleSelectSuggestion(autocompleteSuggestions[selectedSuggestionIndex]);
+                  } else {
+                    handleAddTransaction();
+                  }
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setSelectedSuggestionIndex(prev =>
+                    prev < autocompleteSuggestions.length - 1 ? prev + 1 : prev
+                  );
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+                } else if (e.key === 'Escape') {
+                  setShowAutocomplete(false);
+                  setSelectedSuggestionIndex(-1);
+                }
+              }}
+              onFocus={() => {
+                if (autocompleteSuggestions.length > 0) {
+                  setShowAutocomplete(true);
+                }
+              }}
+            />
+            {showAutocomplete && autocompleteSuggestions.length > 0 && (
+              <AutocompleteDropdown>
+                {autocompleteSuggestions.map((suggestion, index) => (
+                  <AutocompleteItem
+                    key={index}
+                    $isSelected={index === selectedSuggestionIndex}
+                    onClick={() => handleSelectSuggestion(suggestion)}
+                    onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                  >
+                    {suggestion}
+                  </AutocompleteItem>
+                ))}
+              </AutocompleteDropdown>
+            )}
+          </FinanceInputContainer>
+          <FinanceButton onClick={handleAddTransaction}>
+            Adicionar
+          </FinanceButton>
+        </FinanceForm>
+
+        {/* Lista de Transações */}
+        <TransactionsList>
+          {transactions.length === 0 ? (
+            <NoTransactions>
+              <span>Nenhuma transação registrada ainda</span>
+              <span>Adicione uma transação usando o formato: descrição|valor</span>
+            </NoTransactions>
+          ) : (
+            transactions.map((transaction) => (
+              <TransactionItem key={transaction.id} $type={transaction.type}>
+                <TransactionInfo>
+                  <TransactionDescription>{transaction.description}</TransactionDescription>
+                  <TransactionDate>
+                    {transaction.created_at
+                      ? new Date(transaction.created_at).toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })
+                      : ''}
+                  </TransactionDate>
+                </TransactionInfo>
+                <TransactionAmount $type={transaction.type}>
+                  {transaction.type === 'income' ? '+' : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
+                </TransactionAmount>
+                <DeleteTransactionButton onClick={() => transaction.id && handleDeleteTransaction(transaction.id)}>
+                  <FaTrash />
+                </DeleteTransactionButton>
+              </TransactionItem>
+            ))
+          )}
+        </TransactionsList>
+      </FinanceSection>
+
     </Container>
 
   );
@@ -2934,138 +2809,26 @@ const DeleteButton = styled.button`
   }
 `;
 
-const MedicationScheduleSection = styled.div`
-  margin-top: 3rem;
-  margin-bottom: 2rem;
-  padding: 1.5rem;
-  background: transparent;
-  border-radius: 16px;
-`;
-
-const MedicationHeader = styled.div`
-  text-align: center;
-  margin-bottom: 2rem;
-`;
-
-const MedicationTitle = styled.h2`
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #fff;
-  margin: 0 0 0.5rem 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-`;
-
-const MedicationSubtitle = styled.p`
-  font-size: 0.9rem;
-  color: #64748b;
-  margin: 0;
-  font-weight: 500;
-`;
-
-const MedicationGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const MedicationCard = styled.div<{ $color: string }>`
-  background: #1f2937;
-  border: 2px solid ${props => props.$color};
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
-  }
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, ${props => props.$color}, ${props => props.$color}88);
-  }
-`;
-
-const MedicationCardHeader = styled.div`
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #374151;
-`;
-
-const MedicationName = styled.h3`
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #fff;
-  margin: 0 0 0.25rem 0;
-`;
-
-const MedicationDosage = styled.p`
-  font-size: 0.85rem;
-  color: #9ca3af;
-  margin: 0;
-`;
-
-const MedicationSchedule = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-`;
-
-const MedicationDay = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  background: #111827;
-  border-radius: 8px;
-  border: 1px solid #374151;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: #1f2937;
-    border-color: #4b5563;
-  }
-`;
-
-const DayLabel = styled.span`
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #e5e7eb;
-`;
-
-const TimeSlot = styled.span`
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #10b981;
-  font-family: 'Courier New', monospace;
-`;
-
 // Estilos para Controle Financeiro
 const FinanceSection = styled.div`
   margin-bottom: 2rem;
   padding: 1.5rem;
   background: transparent;
   border-radius: 16px;
+
+  @media (max-width: 768px) {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
 `;
 
 const FinanceHeader = styled.div`
   text-align: center;
   margin-bottom: 1.5rem;
+
+  @media (max-width: 768px) {
+    margin-bottom: 1rem;
+  }
 `;
 
 const FinanceTitle = styled.h2`
@@ -3077,6 +2840,11 @@ const FinanceTitle = styled.h2`
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+
+  @media (max-width: 768px) {
+    font-size: 1.25rem;
+    flex-wrap: wrap;
+  }
 `;
 
 const FinanceSubtitle = styled.p`
@@ -3084,16 +2852,23 @@ const FinanceSubtitle = styled.p`
   color: #64748b;
   margin: 0;
   font-weight: 500;
+
+  @media (max-width: 768px) {
+    font-size: 0.85rem;
+    padding: 0 0.5rem;
+  }
 `;
 
 const FinanceCards = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  display: flex;
+  flex-direction: row;
   gap: 1rem;
   margin-bottom: 2rem;
 
   @media (max-width: 768px) {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
   }
 `;
 
@@ -3109,10 +2884,18 @@ const FinanceCard = styled.div<{ $type: 'income' | 'expense' }>`
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  flex: 1;
 
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  @media (max-width: 768px) {
+    padding: 1rem;
+    gap: 0.75rem;
+    flex: none;
+    width: 100%;
   }
 
   &::before {
@@ -3131,6 +2914,10 @@ const FinanceCard = styled.div<{ $type: 'income' | 'expense' }>`
 const FinanceCardIcon = styled.div`
   font-size: 2rem;
   flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    font-size: 1.5rem;
+  }
 `;
 
 const FinanceCardContent = styled.div`
@@ -3138,12 +2925,17 @@ const FinanceCardContent = styled.div`
   flex-direction: column;
   gap: 0.25rem;
   flex: 1;
+  min-width: 0;
 `;
 
 const FinanceCardLabel = styled.span`
   font-size: 0.85rem;
   color: #64748b;
   font-weight: 500;
+
+  @media (max-width: 768px) {
+    font-size: 0.8rem;
+  }
 `;
 
 const FinanceCardValue = styled.span`
@@ -3151,6 +2943,11 @@ const FinanceCardValue = styled.span`
   font-weight: 700;
   color: #1f2937;
   font-family: 'Courier New', monospace;
+  word-break: break-word;
+
+  @media (max-width: 768px) {
+    font-size: 1.25rem;
+  }
 `;
 
 const FinanceForm = styled.div`
@@ -3161,12 +2958,15 @@ const FinanceForm = styled.div`
 
   @media (max-width: 768px) {
     flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
   }
 `;
 
 const FinanceInputContainer = styled.div`
   position: relative;
   flex: 1;
+  min-width: 0;
 `;
 
 const FinanceInput = styled.input`
@@ -3192,6 +2992,7 @@ const FinanceInput = styled.input`
 
   @media (max-width: 768px) {
     font-size: 16px; /* Evita zoom no iOS */
+    padding: 0.875rem 1rem;
   }
 `;
 
@@ -3208,6 +3009,10 @@ const AutocompleteDropdown = styled.div`
   overflow-y: auto;
   z-index: 1000;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+
+  @media (max-width: 768px) {
+    max-height: 150px;
+  }
 `;
 
 const AutocompleteItem = styled.div<{ $isSelected: boolean }>`
@@ -3216,6 +3021,7 @@ const AutocompleteItem = styled.div<{ $isSelected: boolean }>`
   cursor: pointer;
   background: ${props => props.$isSelected ? '#374151' : 'transparent'};
   transition: background 0.2s ease;
+  font-size: 0.95rem;
 
   &:hover {
     background: #374151;
@@ -3223,6 +3029,11 @@ const AutocompleteItem = styled.div<{ $isSelected: boolean }>`
 
   &:first-child {
     border-top: 1px solid #374151;
+  }
+
+  @media (max-width: 768px) {
+    padding: 0.875rem 1rem;
+    font-size: 0.9rem;
   }
 `;
 
@@ -3237,6 +3048,7 @@ const FinanceButton = styled.button`
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  flex-shrink: 0;
 
   &:hover {
     background: #2563eb;
@@ -3245,13 +3057,23 @@ const FinanceButton = styled.button`
 
   @media (max-width: 768px) {
     width: 100%;
+    padding: 0.875rem 1rem;
   }
 `;
 
 const TransactionsList = styled.div`
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 0.75rem;
+
+  @media (max-width: 1024px) {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
 `;
 
 const TransactionItem = styled.div<{ $type: 'income' | 'expense' }>`
@@ -3269,6 +3091,12 @@ const TransactionItem = styled.div<{ $type: 'income' | 'expense' }>`
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   }
+
+  @media (max-width: 768px) {
+    padding: 0.875rem;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
 `;
 
 const TransactionInfo = styled.div`
@@ -3277,6 +3105,11 @@ const TransactionInfo = styled.div`
   gap: 0.25rem;
   flex: 1;
   min-width: 0;
+
+  @media (max-width: 768px) {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
 `;
 
 const TransactionDescription = styled.span`
@@ -3284,11 +3117,20 @@ const TransactionDescription = styled.span`
   font-weight: 600;
   color: #e5e7eb;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+
+  @media (max-width: 768px) {
+    font-size: 0.95rem;
+  }
 `;
 
 const TransactionDate = styled.span`
   font-size: 0.8rem;
   color: #9ca3af;
+
+  @media (max-width: 768px) {
+    font-size: 0.75rem;
+  }
 `;
 
 const TransactionAmount = styled.span<{ $type: 'income' | 'expense' }>`
@@ -3297,6 +3139,14 @@ const TransactionAmount = styled.span<{ $type: 'income' | 'expense' }>`
   color: ${props => props.$type === 'income' ? '#86efac' : '#fca5a5'};
   font-family: 'Courier New', monospace;
   white-space: nowrap;
+  flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    font-size: 1rem;
+    width: 100%;
+    text-align: right;
+    white-space: normal;
+  }
 `;
 
 const DeleteTransactionButton = styled.button`
@@ -3311,10 +3161,20 @@ const DeleteTransactionButton = styled.button`
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  min-width: 36px;
+  min-height: 36px;
 
   &:hover {
     background: #ef4444;
     color: white;
+  }
+
+  @media (max-width: 768px) {
+    padding: 0.5rem;
+    min-width: 40px;
+    min-height: 40px;
+    order: -1;
+    align-self: flex-end;
   }
 `;
 
@@ -3326,14 +3186,27 @@ const NoTransactions = styled.div`
   flex-direction: column;
   gap: 0.5rem;
 
+  @media (max-width: 768px) {
+    padding: 2rem 1rem;
+  }
+
   span:first-child {
     font-size: 1.1rem;
     font-weight: 600;
     color: #9ca3af;
+
+    @media (max-width: 768px) {
+      font-size: 1rem;
+    }
   }
 
   span:last-child {
     font-size: 0.9rem;
     color: #6b7280;
+
+    @media (max-width: 768px) {
+      font-size: 0.85rem;
+      padding: 0 0.5rem;
+    }
   }
 `;

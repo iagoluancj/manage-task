@@ -11,14 +11,11 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 
 -- Índice para melhorar performance nas buscas por descrição (autocomplete)
-CREATE INDEX IF NOT EXISTS idx_transactions_description ON transactions USING gin (description gin_trgm_ops);
+-- Usa índice B-tree simples que funciona bem com LIKE e ILIKE
+CREATE INDEX IF NOT EXISTS idx_transactions_description ON transactions (description);
 
 -- Índice para ordenação por data
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions (created_at DESC);
-
--- Habilitar extensão para busca de texto (necessário para o índice gin_trgm_ops)
--- Execute apenas se ainda não estiver habilitada
--- CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- Comentários para documentação
 COMMENT ON TABLE transactions IS 'Tabela para armazenar transações financeiras (entradas e saídas)';
@@ -27,4 +24,5 @@ COMMENT ON COLUMN transactions.amount IS 'Valor da transação (sempre positivo)
 COMMENT ON COLUMN transactions.type IS 'Tipo: "income" para entradas, "expense" para saídas';
 COMMENT ON COLUMN transactions.category IS 'Categoria da transação (para uso futuro, ex: "transporte", "alimentação")';
 COMMENT ON COLUMN transactions.created_at IS 'Data e hora de criação da transação';
+
 
