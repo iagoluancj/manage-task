@@ -643,7 +643,7 @@ Agendados
     // Parse do formato: "descrição|valor" ou "descrição|+valor" ou "descrição|-valor"
     const parts = newTransaction.split('|');
     if (parts.length !== 2) {
-      toast.error("Formato inválido! Use: descrição|valor (ex: uber|-33,23 ou Salario|+2759,00)");
+      toast.error("Formato inválido! Use: descrição|valor (ex: uber|33,23 ou Salario|+2759,00)");
       return;
     }
 
@@ -667,8 +667,12 @@ Agendados
       return;
     }
 
-    // Determina o tipo: se tem sinal negativo, é saída (expense), senão é entrada (income)
-    const type = isNegative ? 'expense' : 'income';
+    // Determina o tipo: padrão é saída (expense), entradas precisam de sinal positivo
+    const type: Transaction['type'] = isNegative
+      ? 'expense'
+      : hasPositiveSign
+        ? 'income'
+        : 'expense';
 
     try {
       const res = await fetch('/api/transactions', {
@@ -1629,7 +1633,7 @@ Agendados
             <FinanceInput
               ref={transactionInputRef}
               type="text"
-              placeholder="Ex: uber|-33,23 ou Salario|+2759,00"
+            placeholder="Ex: uber|33,23 (saída) ou Salario|+2759,00 (entrada)"
               value={newTransaction}
               onChange={(e) => handleTransactionInput(e.target.value)}
               onKeyDown={(e) => {
