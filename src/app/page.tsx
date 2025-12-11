@@ -1614,8 +1614,8 @@ Agendados
               <MdArrowDownward />
             </FinanceCardIcon>
             <FinanceCardContent>
-              <FinanceCardLabel>Saídas (crédito e débito)</FinanceCardLabel>
-              <FinanceCardHint>Todos os lançamentos de saída</FinanceCardHint>
+              <FinanceCardLabel>Saídas Totais</FinanceCardLabel>
+              <FinanceCardHint>Todos os lançamentos de saída, crédito e debito.</FinanceCardHint>
               <FinanceCardValue>
                 R$ {totalExpense.toFixed(2).replace('.', ',')}
               </FinanceCardValue>
@@ -1640,7 +1640,7 @@ Agendados
             </FinanceCardIcon>
             <FinanceCardContent>
               <FinanceCardLabel>Saídas Crédito</FinanceCardLabel>
-              <FinanceCardHint>A pagar até 05 do próximo mês</FinanceCardHint>
+              <FinanceCardHint>A pagar até 05 do próximo mês.</FinanceCardHint>
               <FinanceCardValue>
                 R$ {totalExpenseCredit.toFixed(2).replace('.', ',')}
               </FinanceCardValue>
