@@ -11,6 +11,7 @@ export interface Transaction {
     description: string;
     amount: number;
     type: 'income' | 'expense'; // 'income' para entradas (+), 'expense' para saídas (-)
+    payment_method?: 'credit' | 'debit'; // default credit
     created_at?: string;
     category?: string; // Para futuras categorizações
 }
@@ -38,7 +39,7 @@ export async function GET() {
 // POST - Criar nova transação
 export async function POST(req: NextRequest) {
     try {
-        const { description, amount, type } = await req.json();
+        const { description, amount, type, paymentMethod } = await req.json();
 
         if (!description || amount === undefined || !type) {
             return NextResponse.json(
@@ -47,6 +48,8 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        const payment_method: 'credit' | 'debit' = paymentMethod === 'debit' ? 'debit' : 'credit';
+
         const { data, error } = await supabase
             .from('transactions')
             .insert([
@@ -54,6 +57,7 @@ export async function POST(req: NextRequest) {
                     description: description.trim(),
                     amount: Math.abs(amount), // Sempre positivo, o tipo define se é entrada ou saída
                     type: type,
+                    payment_method,
                     created_at: new Date().toISOString()
                 }
             ])

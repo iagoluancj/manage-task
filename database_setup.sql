@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     description TEXT NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+    payment_method TEXT NOT NULL DEFAULT 'credit' CHECK (payment_method IN ('credit', 'debit')),
     category TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

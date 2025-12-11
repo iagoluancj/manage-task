@@ -41,6 +41,7 @@ interface Transaction {
   description: string;
   amount: number;
   type: 'income' | 'expense';
+  paymentMethod?: 'credit' | 'debit';
   created_at?: string;
   category?: string;
 }
@@ -567,7 +568,13 @@ Agendados
         const transactionsData = await transactionsRes.json();
 
         if (transactionsData.transactions) {
-          setTransactions(transactionsData.transactions);
+          const normalized = transactionsData.transactions.map(
+            (t: Transaction & { payment_method?: string }) => ({
+              ...t,
+              paymentMethod: t.paymentMethod ?? t.payment_method ?? 'credit',
+            })
+          );
+          setTransactions(normalized);
         }
       } catch (err) {
         console.error('Erro ao carregar dados:', err);
@@ -640,15 +647,17 @@ Agendados
       return;
     }
 
-    // Parse do formato: "descrição|valor" ou "descrição|+valor" ou "descrição|-valor"
+    // Parse do formato: "descrição|valor" ou "descrição|valor|debito"
     const parts = newTransaction.split('|');
-    if (parts.length !== 2) {
-      toast.error("Formato inválido! Use: descrição|valor (ex: uber|-33,23 ou Salario|+2759,00)");
+    if (parts.length < 2) {
+      toast.error("Formato inválido! Use: descricao|valor ou descricao|valor|debito");
       return;
     }
 
     const description = parts[0].trim();
     let amountStr = parts[1].trim();
+    const methodStr = (parts[2] || '').trim().toLowerCase();
+    const paymentMethod: 'credit' | 'debit' = methodStr === 'debito' ? 'debit' : 'credit';
 
     // Verifica se tem sinal explícito
     const isNegative = amountStr.startsWith('-');
@@ -677,13 +686,18 @@ Agendados
         body: JSON.stringify({
           description,
           amount: Math.abs(amount),
-          type
+          type,
+          paymentMethod
         }),
       });
 
       if (res.ok) {
         const newTransactionData = await res.json();
-        setTransactions([newTransactionData, ...transactions]);
+        const normalized = {
+          ...newTransactionData,
+          paymentMethod: newTransactionData.paymentMethod ?? newTransactionData.payment_method ?? paymentMethod,
+        };
+        setTransactions([normalized as Transaction, ...transactions]);
         setNewTransaction("");
         setShowAutocomplete(false);
         setAutocompleteSuggestions([]);
@@ -727,7 +741,9 @@ Agendados
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const netAmount = totalIncome - totalExpense;
+  const totalExpenseCredit = transactions
+    .filter(t => t.type === 'expense' && (t.paymentMethod ?? 'credit') === 'credit')
+    .reduce((sum, t) => sum + t.amount, 0);
 
 
   const getTaskStatus = (startDate: string | number | Date, endDate: string | number | Date) => {
@@ -1612,12 +1628,12 @@ Agendados
             </FinanceCardContent>
           </FinanceCard>
 
-          <FinanceCard $type={netAmount >= 0 ? "income" : "expense"}>
-            <FinanceCardIcon>{netAmount >= 0 ? "✅" : "⚠️"}</FinanceCardIcon>
+          <FinanceCard $type="expense">
+            <FinanceCardIcon>💳</FinanceCardIcon>
             <FinanceCardContent>
-              <FinanceCardLabel>Líquido Atual</FinanceCardLabel>
+              <FinanceCardLabel>Saídas Crédito</FinanceCardLabel>
               <FinanceCardValue>
-                R$ {netAmount.toFixed(2).replace('.', ',')}
+                R$ {totalExpenseCredit.toFixed(2).replace('.', ',')}
               </FinanceCardValue>
             </FinanceCardContent>
           </FinanceCard>
@@ -1691,6 +1707,9 @@ Agendados
               <TransactionItem key={transaction.id} $type={transaction.type}>
                 <TransactionInfo>
                   <TransactionDescription>{transaction.description}</TransactionDescription>
+                  <PaymentTag $method={(transaction.paymentMethod ?? 'credit')}>
+                    {(transaction.paymentMethod ?? 'credit') === 'debit' ? 'Débito' : 'Crédito'}
+                  </PaymentTag>
                   <TransactionDate>
                     {transaction.created_at
                       ? new Date(transaction.created_at).toLocaleDateString('pt-BR', {
@@ -3122,6 +3141,20 @@ const TransactionDescription = styled.span`
   @media (max-width: 768px) {
     font-size: 0.95rem;
   }
+`;
+
+const PaymentTag = styled.span<{ $method: 'credit' | 'debit' }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  align-self: flex-start;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: ${({ $method }) => ($method === 'debit' ? '#0f172a' : '#111827')};
+  background: ${({ $method }) => ($method === 'debit' ? '#a3e635' : '#fde68a')};
+  border: 1px solid ${({ $method }) => ($method === 'debit' ? '#84cc16' : '#facc15')};
 `;
 
 const TransactionDate = styled.span`
