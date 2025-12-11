@@ -6,6 +6,7 @@ import { differenceInDays, differenceInHours, isBefore } from "date-fns";
 import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
 import { FaTrash, FaExclamationTriangle, FaClock, FaCheckCircle, FaCalendarAlt } from "react-icons/fa";
 import { FaTasks } from "react-icons/fa";
+import { MdArrowDownward, MdArrowUpward, MdCreditCard } from "react-icons/md";
 
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -676,8 +677,8 @@ Agendados
       return;
     }
 
-    // Determina o tipo: se tem sinal negativo, é saída (expense), senão é entrada (income)
-    const type = isNegative ? 'expense' : 'income';
+    // Regra solicitada: se não houver '-' (ou '+'), assumir saída; apenas '+' indica entrada
+    const type = hasPositiveSign ? 'income' : 'expense';
 
     try {
       const res = await fetch('/api/transactions', {
@@ -1609,9 +1610,12 @@ Agendados
         {/* Cards de Resumo */}
         <FinanceCards>
           <FinanceCard $type="expense">
-            <FinanceCardIcon>📉</FinanceCardIcon>
+            <FinanceCardIcon $color="expense">
+              <MdArrowDownward />
+            </FinanceCardIcon>
             <FinanceCardContent>
-              <FinanceCardLabel>Total de Saídas</FinanceCardLabel>
+              <FinanceCardLabel>Saídas (crédito e débito)</FinanceCardLabel>
+              <FinanceCardHint>Todos os lançamentos de saída</FinanceCardHint>
               <FinanceCardValue>
                 R$ {totalExpense.toFixed(2).replace('.', ',')}
               </FinanceCardValue>
@@ -1619,7 +1623,9 @@ Agendados
           </FinanceCard>
 
           <FinanceCard $type="income">
-            <FinanceCardIcon>📈</FinanceCardIcon>
+            <FinanceCardIcon $color="income">
+              <MdArrowUpward />
+            </FinanceCardIcon>
             <FinanceCardContent>
               <FinanceCardLabel>Total de Entradas</FinanceCardLabel>
               <FinanceCardValue>
@@ -1629,9 +1635,12 @@ Agendados
           </FinanceCard>
 
           <FinanceCard $type="expense">
-            <FinanceCardIcon>💳</FinanceCardIcon>
+            <FinanceCardIcon $color="credit">
+              <MdCreditCard />
+            </FinanceCardIcon>
             <FinanceCardContent>
               <FinanceCardLabel>Saídas Crédito</FinanceCardLabel>
+              <FinanceCardHint>A pagar até 05 do próximo mês</FinanceCardHint>
               <FinanceCardValue>
                 R$ {totalExpenseCredit.toFixed(2).replace('.', ',')}
               </FinanceCardValue>
@@ -1705,26 +1714,31 @@ Agendados
           ) : (
             transactions.map((transaction) => (
               <TransactionItem key={transaction.id} $type={transaction.type}>
-                <TransactionInfo>
-                  <TransactionDescription>{transaction.description}</TransactionDescription>
-                  <PaymentTag $method={(transaction.paymentMethod ?? 'credit')}>
-                    {(transaction.paymentMethod ?? 'credit') === 'debit' ? 'Débito' : 'Crédito'}
-                  </PaymentTag>
-                  <TransactionDate>
-                    {transaction.created_at
-                      ? new Date(transaction.created_at).toLocaleDateString('pt-BR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })
-                      : ''}
-                  </TransactionDate>
+                <TransactionInfo >
+                  <div className="flex flex-row gap-2 justify-between">
+                    <TransactionDescription>{transaction.description}</TransactionDescription>
+                    <PaymentTag $method={(transaction.paymentMethod ?? 'credit')}>
+                      {(transaction.paymentMethod ?? 'credit') === 'debit' ? 'Débito' : 'Crédito'}
+                    </PaymentTag>
+                  </div>
+                  <div className="flex flex-row gap-2 justify-between">
+                    <TransactionDate>
+                      {transaction.created_at
+                        ? new Date(transaction.created_at).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                        : ''}
+                    </TransactionDate>
+                    <TransactionAmount $type={transaction.type}>
+                      {transaction.type === 'income' ? '+' : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
+                    </TransactionAmount>
+                  </div>
                 </TransactionInfo>
-                <TransactionAmount $type={transaction.type}>
-                  {transaction.type === 'income' ? '+' : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
-                </TransactionAmount>
+
                 <DeleteTransactionButton onClick={() => transaction.id && handleDeleteTransaction(transaction.id)}>
                   <FaTrash />
                 </DeleteTransactionButton>
@@ -2830,23 +2844,24 @@ const DeleteButton = styled.button`
 
 // Estilos para Controle Financeiro
 const FinanceSection = styled.div`
-  margin-bottom: 2rem;
-  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  padding: 1.25rem;
   background: transparent;
   border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
 
   @media (max-width: 768px) {
-    padding: 1rem;
-    margin-bottom: 1rem;
+    padding: 0.9rem;
+    margin-bottom: 0.75rem;
   }
 `;
 
 const FinanceHeader = styled.div`
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.2rem;
 
   @media (max-width: 768px) {
-    margin-bottom: 1rem;
+    margin-bottom: 0.9rem;
   }
 `;
 
@@ -2881,13 +2896,13 @@ const FinanceSubtitle = styled.p`
 const FinanceCards = styled.div`
   display: flex;
   flex-direction: row;
-  gap: 1rem;
-  margin-bottom: 2rem;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
 
   @media (max-width: 768px) {
     flex-direction: column;
-    gap: 0.75rem;
-    margin-bottom: 1.5rem;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
   }
 `;
 
@@ -2895,10 +2910,10 @@ const FinanceCard = styled.div<{ $type: 'income' | 'expense' }>`
   background: ${props => props.$type === 'income' ? '#f0fdf4' : '#fef2f2'};
   border: 2px solid ${props => props.$type === 'income' ? '#86efac' : '#fca5a5'};
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 0.9rem 1rem;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.6rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   position: relative;
@@ -2911,8 +2926,8 @@ const FinanceCard = styled.div<{ $type: 'income' | 'expense' }>`
   }
 
   @media (max-width: 768px) {
-    padding: 1rem;
-    gap: 0.75rem;
+    padding: 0.8rem 0.9rem;
+    gap: 0.55rem;
     flex: none;
     width: 100%;
   }
@@ -2930,27 +2945,36 @@ const FinanceCard = styled.div<{ $type: 'income' | 'expense' }>`
   }
 `;
 
-const FinanceCardIcon = styled.div`
-  font-size: 2rem;
+const FinanceCardIcon = styled.div<{ $color?: 'income' | 'expense' | 'credit' }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: ${({ $color }) =>
+    $color === 'income'
+      ? '#15803d'
+      : $color === 'credit'
+        ? '#1d4ed8'
+        : '#b91c1c'};
+  font-size: 1.25rem;
   flex-shrink: 0;
 
   @media (max-width: 768px) {
-    font-size: 1.5rem;
+    font-size: 1.1rem;
   }
 `;
 
 const FinanceCardContent = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   flex: 1;
   min-width: 0;
 `;
 
 const FinanceCardLabel = styled.span`
   font-size: 0.85rem;
-  color: #64748b;
-  font-weight: 500;
+  color: #475569;
+  font-weight: 600;
 
   @media (max-width: 768px) {
     font-size: 0.8rem;
@@ -2958,27 +2982,33 @@ const FinanceCardLabel = styled.span`
 `;
 
 const FinanceCardValue = styled.span`
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  color: #1f2937;
+  color: #0f172a;
   font-family: 'Courier New', monospace;
   word-break: break-word;
 
   @media (max-width: 768px) {
-    font-size: 1.25rem;
+    font-size: 1.08rem;
   }
+`;
+
+const FinanceCardHint = styled.span`
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 300;
 `;
 
 const FinanceForm = styled.div`
   display: flex;
-  gap: 1rem;
-  margin-bottom: 2rem;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
   position: relative;
 
   @media (max-width: 768px) {
     flex-direction: column;
-    gap: 0.75rem;
-    margin-bottom: 1.5rem;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
   }
 `;
 
@@ -2990,7 +3020,7 @@ const FinanceInputContainer = styled.div`
 
 const FinanceInput = styled.input`
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 0.65rem 0.9rem;
   border: 2px solid #374151;
   border-radius: 8px;
   background: #1f2937;
@@ -3011,7 +3041,7 @@ const FinanceInput = styled.input`
 
   @media (max-width: 768px) {
     font-size: 16px; /* Evita zoom no iOS */
-    padding: 0.875rem 1rem;
+    padding: 0.75rem 0.9rem;
   }
 `;
 
@@ -3057,7 +3087,7 @@ const AutocompleteItem = styled.div<{ $isSelected: boolean }>`
 `;
 
 const FinanceButton = styled.button`
-  padding: 0.75rem 2rem;
+  padding: 0.7rem 1.2rem;
   background: #3b82f6;
   color: white;
   border: none;
@@ -3076,14 +3106,14 @@ const FinanceButton = styled.button`
 
   @media (max-width: 768px) {
     width: 100%;
-    padding: 0.875rem 1rem;
+    padding: 0.8rem 1rem;
   }
 `;
 
 const TransactionsList = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 0.75rem;
+  gap: 0.65rem;
 
   @media (max-width: 1024px) {
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -3091,7 +3121,7 @@ const TransactionsList = styled.div`
 
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
-    gap: 0.5rem;
+    gap: 0.45rem;
   }
 `;
 
@@ -3099,11 +3129,11 @@ const TransactionItem = styled.div<{ $type: 'income' | 'expense' }>`
   background: #1f2937;
   border: 2px solid ${props => props.$type === 'income' ? '#86efac' : '#fca5a5'};
   border-radius: 12px;
-  padding: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  padding: 0.5rem 0.5rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0.35rem 0.5rem;
   transition: all 0.3s ease;
 
   &:hover {
@@ -3112,34 +3142,27 @@ const TransactionItem = styled.div<{ $type: 'income' | 'expense' }>`
   }
 
   @media (max-width: 768px) {
-    padding: 0.875rem;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    padding: 0.8rem 0.85rem;
+    gap: 0.3rem 0.5rem;
   }
 `;
 
 const TransactionInfo = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  flex: 1;
-  min-width: 0;
+  gap: 0.15rem;
 
-  @media (max-width: 768px) {
-    min-width: 0;
-    flex: 1 1 auto;
-  }
 `;
 
 const TransactionDescription = styled.span`
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  color: #e5e7eb;
+  color: #f8fafc;
   word-wrap: break-word;
   overflow-wrap: break-word;
 
   @media (max-width: 768px) {
-    font-size: 0.95rem;
+    font-size: 0.93rem;
   }
 `;
 
@@ -3148,18 +3171,18 @@ const PaymentTag = styled.span<{ $method: 'credit' | 'debit' }>`
   align-items: center;
   gap: 0.35rem;
   align-self: flex-start;
-  padding: 0.35rem 0.65rem;
+  padding: 0.01rem 0.2rem;
   border-radius: 999px;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  color: ${({ $method }) => ($method === 'debit' ? '#0f172a' : '#111827')};
-  background: ${({ $method }) => ($method === 'debit' ? '#a3e635' : '#fde68a')};
-  border: 1px solid ${({ $method }) => ($method === 'debit' ? '#84cc16' : '#facc15')};
+  color: ${({ $method }) => ($method === 'debit' ? '#0f172a' : '#0f172a')};
+  background: ${({ $method }) => ($method === 'debit' ? '#c5f36b' : '#fde68a')};
+  border: 1px solid ${({ $method }) => ($method === 'debit' ? '#a3e635' : '#facc15')};
 `;
 
 const TransactionDate = styled.span`
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: #94a3b8;
 
   @media (max-width: 768px) {
     font-size: 0.75rem;
@@ -3167,18 +3190,18 @@ const TransactionDate = styled.span`
 `;
 
 const TransactionAmount = styled.span<{ $type: 'income' | 'expense' }>`
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 700;
   color: ${props => props.$type === 'income' ? '#86efac' : '#fca5a5'};
   font-family: 'Courier New', monospace;
   white-space: nowrap;
-  flex-shrink: 0;
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+  align-self: center;
 
   @media (max-width: 768px) {
     font-size: 1rem;
-    width: 100%;
     text-align: right;
-    white-space: normal;
   }
 `;
 
@@ -3194,8 +3217,10 @@ const DeleteTransactionButton = styled.button`
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  min-width: 36px;
-  min-height: 36px;
+  min-width: 32px;
+  min-height: 32px;
+  grid-column: 2 / 3;
+  grid-row: 1 / 2;
 
   &:hover {
     background: #ef4444;
@@ -3203,11 +3228,9 @@ const DeleteTransactionButton = styled.button`
   }
 
   @media (max-width: 768px) {
-    padding: 0.5rem;
-    min-width: 40px;
-    min-height: 40px;
-    order: -1;
-    align-self: flex-end;
+    padding: 0.45rem;
+    min-width: 34px;
+    min-height: 34px;
   }
 `;
 
