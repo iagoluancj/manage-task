@@ -284,6 +284,35 @@ Agendados
     }
   };
 
+  // Atualização automática das notas rápidas (polling)
+  useEffect(() => {
+    if (!isAuthenticated || editingQuickNotes) {
+      return;
+    }
+
+    const fetchQuickNotes = async () => {
+      try {
+        const res = await fetch('/api/quick-notes');
+        const data = await res.json();
+
+        if (data.notes && data.notes !== quickNotes) {
+          // Só atualiza se o conteúdo for diferente para evitar loops
+          setQuickNotes(data.notes);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar notas:', error);
+      }
+    };
+
+    // Busca imediatamente quando não está editando
+    fetchQuickNotes();
+
+    // Configura polling a cada 5 segundos quando não está editando
+    const interval = setInterval(fetchQuickNotes, 5000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated, editingQuickNotes, quickNotes]);
+
   // Ordena rotina por horário
   const sortRoutineByTime = useCallback((routine: typeof workRoutine) => {
     return [...routine].sort((a, b) => {
@@ -1186,7 +1215,6 @@ Agendados
       <PrioritySection>
         <PriorityHeader>
           <PriorityTitle>🚨 Tarefas Prioritárias</PriorityTitle>
-          <PrioritySubtitle>Urgentes, vencidas e que precisam de atenção</PrioritySubtitle>
         </PriorityHeader>
 
         <PriorityTasks>
@@ -1257,6 +1285,186 @@ Agendados
           )}
         </PriorityTasks>
       </PrioritySection>
+
+      <Line />
+
+      {/* Seção de Notas Rápidas */}
+      <QuickNotesSection>
+        <QuickNotesHeader>
+          <QuickNotesTitle>📝 Notas Rápidas</QuickNotesTitle>
+          <QuickNotesSubtitle>Suas anotações do WhatsApp</QuickNotesSubtitle>
+        </QuickNotesHeader>
+
+        <QuickNotesContent>
+          {editingQuickNotes ? (
+            <QuickNotesTextarea
+              ref={textareaRef}
+              value={quickNotes}
+              onChange={(e) => setQuickNotes(e.target.value)}
+              onBlur={handleQuickNotesBlur}
+              autoFocus
+              spellCheck={false}
+            />
+          ) : (
+            <QuickNotesDisplay onClick={() => setEditingQuickNotes(true)}>
+              {quickNotes.split('\n').map((line, index) => (
+                <div key={index}>{line || ' '}</div>
+              ))}
+            </QuickNotesDisplay>
+          )}
+        </QuickNotesContent>
+      </QuickNotesSection>
+
+      <Line />
+
+      {/* Seção de Controle Financeiro */}
+      <FinanceSection>
+        <FinanceHeader>
+          <FinanceTitle>💰 Controle Financeiro</FinanceTitle>
+          <FinanceSubtitle>Gerencie suas entradas e saídas</FinanceSubtitle>
+        </FinanceHeader>
+
+        {/* Cards de Resumo */}
+        <FinanceCards>
+          <FinanceCard $type="expense">
+            <FinanceCardIcon $color="expense">
+              <MdArrowDownward />
+            </FinanceCardIcon>
+            <FinanceCardContent>
+              <FinanceCardLabel>Saídas Totais</FinanceCardLabel>
+              <FinanceCardHint>Todos os lançamentos de saída, crédito e debito.</FinanceCardHint>
+              <FinanceCardValue>
+                R$ {totalExpense.toFixed(2).replace('.', ',')}
+              </FinanceCardValue>
+            </FinanceCardContent>
+          </FinanceCard>
+
+          <FinanceCard $type="income">
+            <FinanceCardIcon $color="income">
+              <MdArrowUpward />
+            </FinanceCardIcon>
+            <FinanceCardContent>
+              <FinanceCardLabel>Total de Entradas</FinanceCardLabel>
+              <FinanceCardHint>Total de recebimentos</FinanceCardHint>
+              <FinanceCardValue>
+                R$ {totalIncome.toFixed(2).replace('.', ',')}
+              </FinanceCardValue>
+            </FinanceCardContent>
+          </FinanceCard>
+
+          <FinanceCard $type="expense">
+            <FinanceCardIcon $color="credit">
+              <MdCreditCard />
+            </FinanceCardIcon>
+            <FinanceCardContent>
+              <FinanceCardLabel>Saídas Crédito</FinanceCardLabel>
+              <FinanceCardHint>A pagar até 05 do próximo mês.</FinanceCardHint>
+              <FinanceCardValue>
+                R$ {totalExpenseCredit.toFixed(2).replace('.', ',')}
+              </FinanceCardValue>
+            </FinanceCardContent>
+          </FinanceCard>
+        </FinanceCards>
+
+        {/* Formulário de Inserção */}
+        <FinanceForm>
+          <FinanceInputContainer data-finance-input-container>
+            <FinanceInput
+              ref={transactionInputRef}
+              type="text"
+              placeholder="Ex: uber|-33,23 ou Salario|+2759,00"
+              value={newTransaction}
+              onChange={(e) => handleTransactionInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (showAutocomplete && selectedSuggestionIndex >= 0 && autocompleteSuggestions[selectedSuggestionIndex]) {
+                    handleSelectSuggestion(autocompleteSuggestions[selectedSuggestionIndex]);
+                  } else {
+                    handleAddTransaction();
+                  }
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setSelectedSuggestionIndex(prev =>
+                    prev < autocompleteSuggestions.length - 1 ? prev + 1 : prev
+                  );
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+                } else if (e.key === 'Escape') {
+                  setShowAutocomplete(false);
+                  setSelectedSuggestionIndex(-1);
+                }
+              }}
+              onFocus={() => {
+                if (autocompleteSuggestions.length > 0) {
+                  setShowAutocomplete(true);
+                }
+              }}
+            />
+            {showAutocomplete && autocompleteSuggestions.length > 0 && (
+              <AutocompleteDropdown>
+                {autocompleteSuggestions.map((suggestion, index) => (
+                  <AutocompleteItem
+                    key={index}
+                    $isSelected={index === selectedSuggestionIndex}
+                    onClick={() => handleSelectSuggestion(suggestion)}
+                    onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                  >
+                    {suggestion}
+                  </AutocompleteItem>
+                ))}
+              </AutocompleteDropdown>
+            )}
+          </FinanceInputContainer>
+          <FinanceButton onClick={handleAddTransaction}>
+            Adicionar
+          </FinanceButton>
+        </FinanceForm>
+
+        {/* Lista de Transações */}
+        <TransactionsList>
+          {transactions.length === 0 ? (
+            <NoTransactions>
+              <span>Nenhuma transação registrada ainda</span>
+              <span>Adicione uma transação usando o formato: descrição|valor</span>
+            </NoTransactions>
+          ) : (
+            transactions.map((transaction) => (
+              <TransactionItem key={transaction.id} $type={transaction.type}>
+                <TransactionInfo >
+                  <div className="flex flex-row gap-2 justify-between">
+                    <TransactionDescription>{transaction.description}</TransactionDescription>
+                    <PaymentTag $method={(transaction.paymentMethod ?? 'credit')}>
+                      {(transaction.paymentMethod ?? 'credit') === 'debit' ? 'Débito' : 'Crédito'}
+                    </PaymentTag>
+                  </div>
+                  <div className="flex flex-row gap-2 justify-between">
+                    <TransactionDate>
+                      {transaction.created_at
+                        ? new Date(transaction.created_at).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                        : ''}
+                    </TransactionDate>
+                    <TransactionAmount $type={transaction.type}>
+                      {transaction.type === 'income' ? '+' : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
+                    </TransactionAmount>
+                  </div>
+                </TransactionInfo>
+
+                <DeleteTransactionButton onClick={() => transaction.id && handleDeleteTransaction(transaction.id)}>
+                  <FaTrash />
+                </DeleteTransactionButton>
+              </TransactionItem>
+            ))
+          )}
+        </TransactionsList>
+      </FinanceSection>
 
       <Line />
       <Main>
@@ -1430,173 +1638,144 @@ Agendados
         <NewButton onClick={handleAddNewTask}>Adicionar tópico</NewButton>
       </NewTopicContainer>
 
+      <Line />
 
-      {/* Seção de Rotina e Notas Rápidas - Lado a Lado */}
-      <RoutineAndNotesContainer>
-        {/* Rotina */}
-        <RoutineSection>
-          <RoutineHeader>
-            <RoutineTitle>
-              {workDayType === 'work' ? '💼' : '🏖️'} Rotina do Dia
-            </RoutineTitle>
-            <RoutineSubtitle>
-              {workDayType === 'work' ? 'Dia de Trabalho Presencial' : 'Dia de Folga'}
-            </RoutineSubtitle>
-          </RoutineHeader>
+      {/* Seção de Rotina do Dia */}
+      <RoutineSection>
+        <RoutineHeader>
+          <RoutineTitle>
+            {workDayType === 'work' ? '💼' : '🏖️'} Rotina do Dia
+          </RoutineTitle>
+          <RoutineSubtitle>
+            {workDayType === 'work' ? 'Dia de Trabalho Presencial' : 'Dia de Folga'}
+          </RoutineSubtitle>
+        </RoutineHeader>
 
-          <RoutineContent>
-            {(workDayType === 'work' ? workRoutine : offRoutine).map((item, index) => (
-              <RoutineItem key={index}>
-                {editingRoutineItem?.type === workDayType && editingRoutineItem?.index === index ? (
-                  <>
-                    <RoutineItemContent>
-                      <RoutineInput
-                        type="text"
-                        placeholder="🕐 Horário"
-                        value={item.time}
-                        onChange={async (e) => {
-                          const newRoutine = workDayType === 'work' ? [...workRoutine] : [...offRoutine];
-                          newRoutine[index].time = e.target.value;
-                          const updatedRoutine = sortRoutineByTime(newRoutine);
+        <RoutineContent>
+          {(workDayType === 'work' ? workRoutine : offRoutine).map((item, index) => (
+            <RoutineItem key={index}>
+              {editingRoutineItem?.type === workDayType && editingRoutineItem?.index === index ? (
+                <>
+                  <RoutineItemContent>
+                    <RoutineInput
+                      type="text"
+                      placeholder="🕐 Horário"
+                      value={item.time}
+                      onChange={async (e) => {
+                        const newRoutine = workDayType === 'work' ? [...workRoutine] : [...offRoutine];
+                        newRoutine[index].time = e.target.value;
+                        const updatedRoutine = sortRoutineByTime(newRoutine);
 
-                          if (workDayType === 'work') {
-                            setWorkRoutine(updatedRoutine);
-                          } else {
-                            setOffRoutine(updatedRoutine);
+                        if (workDayType === 'work') {
+                          setWorkRoutine(updatedRoutine);
+                        } else {
+                          setOffRoutine(updatedRoutine);
+                        }
+
+                        // Auto-save
+                        try {
+                          const res = await fetch('/api/routine', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ type: workDayType, routine: updatedRoutine }),
+                          });
+
+                          if (res.ok) {
+                            toast.success('Rotina salva automaticamente!', { duration: 2000 });
                           }
-
-                          // Auto-save
-                          try {
-                            const res = await fetch('/api/routine', {
-                              method: 'PUT',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ type: workDayType, routine: updatedRoutine }),
-                            });
-
-                            if (res.ok) {
-                              toast.success('Rotina salva automaticamente!', { duration: 2000 });
-                            }
-                          } catch (error) {
-                            console.error('Erro ao salvar rotina:', error);
-                          }
-                        }}
-                        autoFocus
-                      />
-                      <RoutineInput
-                        type="text"
-                        placeholder="📝 Atividade"
-                        value={editingRoutineValue}
-                        onChange={(e) => setEditingRoutineValue(e.target.value)}
-                      />
-                    </RoutineItemContent>
-                    <RoutineActions>
-                      <RoutineSaveButton onClick={() => handleSaveRoutineEdit(workDayType, index, 'activity')}>
-                        ✓
-                      </RoutineSaveButton>
-                      <RoutineCancelButton onClick={() => {
-                        setEditingRoutineItem(null);
-                        setEditingRoutineValue("");
-                      }}>
-                        ✕
-                      </RoutineCancelButton>
-                    </RoutineActions>
-                  </>
-                ) : (
-                  <>
-                    <RoutineCheckbox
-                      type="checkbox"
-                      checked={checkedItems.has(`${workDayType}-${index}`)}
-                      onChange={() => toggleCheckbox(workDayType, index)}
-                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        } catch (error) {
+                          console.error('Erro ao salvar rotina:', error);
+                        }
+                      }}
+                      autoFocus
                     />
-                    <RoutineItemContent onClick={() => handleEditRoutineItem(workDayType, index)}>
-                      <RoutineTime $checked={checkedItems.has(`${workDayType}-${index}`)}>
-                        {item.time}
-                      </RoutineTime>
-                      <RoutineActivity $checked={checkedItems.has(`${workDayType}-${index}`)}>
-                        {item.activity}
-                      </RoutineActivity>
-                    </RoutineItemContent>
-
-                    <RoutineActions>
-                      <RoutineDeleteButton onClick={() => handleDeleteRoutineItem(workDayType, index)}>
-                        🗑️
-                      </RoutineDeleteButton>
-                    </RoutineActions>
-                  </>
-                )}
-              </RoutineItem>
-            ))}
-
-            {isAddingRoutineItem && (
-              <RoutineAddForm>
-                <RoutineItemContent>
-                  <RoutineInput
-                    type="text"
-                    placeholder="🕐 Horário (ex: 08:00)"
-                    value={newRoutineTime}
-                    onChange={(e) => setNewRoutineTime(e.target.value)}
-                    style={{ minWidth: '100px', flexShrink: 0 }}
+                    <RoutineInput
+                      type="text"
+                      placeholder="📝 Atividade"
+                      value={editingRoutineValue}
+                      onChange={(e) => setEditingRoutineValue(e.target.value)}
+                    />
+                  </RoutineItemContent>
+                  <RoutineActions>
+                    <RoutineSaveButton onClick={() => handleSaveRoutineEdit(workDayType, index, 'activity')}>
+                      ✓
+                    </RoutineSaveButton>
+                    <RoutineCancelButton onClick={() => {
+                      setEditingRoutineItem(null);
+                      setEditingRoutineValue("");
+                    }}>
+                      ✕
+                    </RoutineCancelButton>
+                  </RoutineActions>
+                </>
+              ) : (
+                <>
+                  <RoutineCheckbox
+                    type="checkbox"
+                    checked={checkedItems.has(`${workDayType}-${index}`)}
+                    onChange={() => toggleCheckbox(workDayType, index)}
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
                   />
-                  <RoutineInput
-                    type="text"
-                    placeholder="📝 Atividade"
-                    value={newRoutineActivity}
-                    onChange={(e) => setNewRoutineActivity(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                </RoutineItemContent>
+                  <RoutineItemContent onClick={() => handleEditRoutineItem(workDayType, index)}>
+                    <RoutineTime $checked={checkedItems.has(`${workDayType}-${index}`)}>
+                      {item.time}
+                    </RoutineTime>
+                    <RoutineActivity $checked={checkedItems.has(`${workDayType}-${index}`)}>
+                      {item.activity}
+                    </RoutineActivity>
+                  </RoutineItemContent>
 
-                <RoutineAddButtons>
-                  <RoutineSaveButton onClick={() => handleAddRoutineItem(workDayType)}>
-                    ✓
-                  </RoutineSaveButton>
-                  <RoutineCancelButton onClick={() => {
-                    setIsAddingRoutineItem(false);
-                    setNewRoutineTime("");
-                    setNewRoutineActivity("");
-                  }}>
-                    ✕
-                  </RoutineCancelButton>
-                </RoutineAddButtons>
-              </RoutineAddForm>
-            )}
+                  <RoutineActions>
+                    <RoutineDeleteButton onClick={() => handleDeleteRoutineItem(workDayType, index)}>
+                      🗑️
+                    </RoutineDeleteButton>
+                  </RoutineActions>
+                </>
+              )}
+            </RoutineItem>
+          ))}
 
-            {!isAddingRoutineItem && (
-              <RoutineAddButton onClick={() => setIsAddingRoutineItem(true)}>
-                + Adicionar Item
-              </RoutineAddButton>
-            )}
-          </RoutineContent>
-        </RoutineSection>
+          {isAddingRoutineItem && (
+            <RoutineAddForm>
+              <RoutineItemContent>
+                <RoutineInput
+                  type="text"
+                  placeholder="🕐 Horário (ex: 08:00)"
+                  value={newRoutineTime}
+                  onChange={(e) => setNewRoutineTime(e.target.value)}
+                  style={{ minWidth: '100px', flexShrink: 0 }}
+                />
+                <RoutineInput
+                  type="text"
+                  placeholder="📝 Atividade"
+                  value={newRoutineActivity}
+                  onChange={(e) => setNewRoutineActivity(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+              </RoutineItemContent>
 
-        {/* Notas Rápidas */}
-        <QuickNotesSection>
-          <QuickNotesHeader>
-            <QuickNotesTitle>📝 Notas Rápidas</QuickNotesTitle>
-            <QuickNotesSubtitle>Suas anotações do WhatsApp</QuickNotesSubtitle>
-          </QuickNotesHeader>
+              <RoutineAddButtons>
+                <RoutineSaveButton onClick={() => handleAddRoutineItem(workDayType)}>
+                  ✓
+                </RoutineSaveButton>
+                <RoutineCancelButton onClick={() => {
+                  setIsAddingRoutineItem(false);
+                  setNewRoutineTime("");
+                  setNewRoutineActivity("");
+                }}>
+                  ✕
+                </RoutineCancelButton>
+              </RoutineAddButtons>
+            </RoutineAddForm>
+          )}
 
-          <QuickNotesContent>
-            {editingQuickNotes ? (
-              <QuickNotesTextarea
-                ref={textareaRef}
-                value={quickNotes}
-                onChange={(e) => setQuickNotes(e.target.value)}
-                onBlur={handleQuickNotesBlur}
-                autoFocus
-                spellCheck={false}
-              />
-            ) : (
-              <QuickNotesDisplay onClick={() => setEditingQuickNotes(true)}>
-                {quickNotes.split('\n').map((line, index) => (
-                  <div key={index}>{line || ' '}</div>
-                ))}
-              </QuickNotesDisplay>
-            )}
-          </QuickNotesContent>
-        </QuickNotesSection>
-      </RoutineAndNotesContainer>
+          {!isAddingRoutineItem && (
+            <RoutineAddButton onClick={() => setIsAddingRoutineItem(true)}>
+              + Adicionar Item
+            </RoutineAddButton>
+          )}
+        </RoutineContent>
+      </RoutineSection>
 
       <Line />
 
@@ -2002,12 +2181,6 @@ const PriorityTitle = styled.h2`
   gap: 0.5rem;
 `;
 
-const PrioritySubtitle = styled.p`
-  font-size: 0.9rem;
-  color: #64748b;
-  margin: 0;
-  font-weight: 500;
-`;
 
 const PriorityTasks = styled.div`
   display: flex;
@@ -2453,17 +2626,6 @@ const RoutineCancelButton = styled.button`
   }
 `;
 
-const RoutineAndNotesContainer = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  margin-top: 3rem;
-  margin-bottom: 2rem;
-
-  @media (max-width: 1024px) {
-    grid-template-columns: 1fr;
-  }
-`;
 
 const QuickNotesSection = styled.div`
   padding: 1.5rem;
