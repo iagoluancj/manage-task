@@ -235,6 +235,8 @@ Agendados
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const transactionInputRef = useRef<HTMLInputElement | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   // Ajusta a altura do textarea automaticamente
   useEffect(() => {
@@ -732,6 +734,7 @@ Agendados
         setShowAutocomplete(false);
         setAutocompleteSuggestions([]);
         setSelectedSuggestionIndex(-1);
+        setCurrentPage(1); // Volta para primeira página ao adicionar nova transação
         toast.success('Transação adicionada!', { duration: 2000 });
       } else {
         toast.error('Erro ao adicionar transação!');
@@ -751,7 +754,13 @@ Agendados
       });
 
       if (res.ok) {
-        setTransactions(transactions.filter(t => t.id !== id));
+        const updatedTransactions = transactions.filter(t => t.id !== id);
+        setTransactions(updatedTransactions);
+        // Ajusta a página se necessário após deletar
+        const totalPages = Math.ceil(updatedTransactions.length / itemsPerPage);
+        if (currentPage > totalPages && totalPages > 0) {
+          setCurrentPage(totalPages);
+        }
         toast.success('Transação removida!', { duration: 2000 });
       } else {
         toast.error('Erro ao remover transação!');
@@ -1423,47 +1432,78 @@ Agendados
         </FinanceForm>
 
         {/* Lista de Transações */}
-        <TransactionsList>
-          {transactions.length === 0 ? (
-            <NoTransactions>
-              <span>Nenhuma transação registrada ainda</span>
-              <span>Adicione uma transação usando o formato: descrição|valor</span>
-            </NoTransactions>
-          ) : (
-            transactions.map((transaction) => (
-              <TransactionItem key={transaction.id} $type={transaction.type}>
-                <TransactionInfo >
-                  <div className="flex flex-row gap-2 justify-between">
-                    <TransactionDescription>{transaction.description}</TransactionDescription>
-                    <PaymentTag $method={(transaction.paymentMethod ?? 'credit')}>
-                      {(transaction.paymentMethod ?? 'credit') === 'debit' ? 'Débito' : 'Crédito'}
-                    </PaymentTag>
-                  </div>
-                  <div className="flex flex-row gap-2 justify-between">
-                    <TransactionDate>
-                      {transaction.created_at
-                        ? new Date(transaction.created_at).toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })
-                        : ''}
-                    </TransactionDate>
-                    <TransactionAmount $type={transaction.type}>
-                      {transaction.type === 'income' ? '+' : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
-                    </TransactionAmount>
-                  </div>
-                </TransactionInfo>
+        {(() => {
+          const totalPages = Math.ceil(transactions.length / itemsPerPage);
+          const startIndex = (currentPage - 1) * itemsPerPage;
+          const endIndex = startIndex + itemsPerPage;
+          const paginatedTransactions = transactions.slice(startIndex, endIndex);
 
-                <DeleteTransactionButton onClick={() => transaction.id && handleDeleteTransaction(transaction.id)}>
-                  <FaTrash />
-                </DeleteTransactionButton>
-              </TransactionItem>
-            ))
-          )}
-        </TransactionsList>
+          return (
+            <>
+              <TransactionsList>
+                {transactions.length === 0 ? (
+                  <NoTransactions>
+                    <span>Nenhuma transação registrada ainda</span>
+                    <span>Adicione uma transação usando o formato: descrição|valor</span>
+                  </NoTransactions>
+                ) : (
+                  paginatedTransactions.map((transaction) => (
+                    <TransactionItem key={transaction.id} $type={transaction.type}>
+                      <TransactionInfo >
+                        <div className="flex flex-row gap-2 justify-between">
+                          <TransactionDescription>{transaction.description}</TransactionDescription>
+                          <PaymentTag $method={(transaction.paymentMethod ?? 'credit')}>
+                            {(transaction.paymentMethod ?? 'credit') === 'debit' ? 'Débito' : 'Crédito'}
+                          </PaymentTag>
+                        </div>
+                        <div className="flex flex-row gap-2 justify-between">
+                          <TransactionDate>
+                            {transaction.created_at
+                              ? new Date(transaction.created_at).toLocaleDateString('pt-BR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                              : ''}
+                          </TransactionDate>
+                          <TransactionAmount $type={transaction.type}>
+                            {transaction.type === 'income' ? '+' : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
+                          </TransactionAmount>
+                        </div>
+                      </TransactionInfo>
+
+                      <DeleteTransactionButton onClick={() => transaction.id && handleDeleteTransaction(transaction.id)}>
+                        <FaTrash />
+                      </DeleteTransactionButton>
+                    </TransactionItem>
+                  ))
+                )}
+              </TransactionsList>
+
+              {transactions.length > itemsPerPage && (
+                <PaginationContainer>
+                  <PaginationButton
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Anterior
+                  </PaginationButton>
+                  <PaginationInfo>
+                    Página {currentPage} de {totalPages} ({transactions.length} total)
+                  </PaginationInfo>
+                  <PaginationButton
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Próxima
+                  </PaginationButton>
+                </PaginationContainer>
+              )}
+            </>
+          );
+        })()}
       </FinanceSection>
 
       <Line />
@@ -3426,5 +3466,52 @@ const NoTransactions = styled.div`
       font-size: 0.85rem;
       padding: 0 0.5rem;
     }
+  }
+`;
+
+const PaginationContainer = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 0.75rem;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+`;
+
+const PaginationButton = styled.button<{ disabled?: boolean }>`
+  padding: 0.5rem 1rem;
+  background: ${props => props.disabled ? '#374151' : '#3b82f6'};
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+  transition: all 0.2s ease;
+  opacity: ${props => props.disabled ? 0.5 : 1};
+
+  &:hover:not(:disabled) {
+    background: #2563eb;
+    transform: translateY(-1px);
+  }
+
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 0.75rem;
+  }
+`;
+
+const PaginationInfo = styled.span`
+  font-size: 0.85rem;
+  color: #9ca3af;
+  font-weight: 500;
+
+  @media (max-width: 768px) {
+    font-size: 0.8rem;
   }
 `;
