@@ -2699,9 +2699,11 @@ const QuickNotesSubtitle = styled.p`
 const QuickNotesContent = styled.div`
   max-width: 800px;
   margin: 0 auto;
+  width: 100%;
 `;
 
 const QuickNotesDisplay = styled.div`
+  width: 100%;
   background: #1f2937;
   border: 2px solid #374151;
   border-radius: 12px;
@@ -2715,6 +2717,7 @@ const QuickNotesDisplay = styled.div`
   transition: all 0.3s ease;
   height: auto;
   min-height: auto;
+  box-sizing: border-box;
 
   &:hover {
     border-color: #4b5563;
@@ -2723,6 +2726,11 @@ const QuickNotesDisplay = styled.div`
 
   div {
     min-height: 1.5rem;
+  }
+
+  @media (max-width: 768px) {
+    font-size: 16px; /* Mantém consistência com o textarea (evita zoom no iOS) */
+    padding: 1rem;
   }
 `;
 
@@ -2745,6 +2753,7 @@ const QuickNotesTextarea = styled.textarea`
   overflow: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  display: block;
 
   &:focus {
     border-color: #22c55e;
