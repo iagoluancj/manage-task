@@ -2671,6 +2671,7 @@ const QuickNotesSection = styled.div`
   padding: 1.5rem;
   background: transparent;
   border-radius: 16px;
+  width: 100%;
 `;
 
 const QuickNotesHeader = styled.div`
