@@ -1920,6 +1920,21 @@ Agendados
               </FinanceCardValue>
             </FinanceCardContent>
           </FinanceCard>
+
+          {totalInvoicePayments > 0 && (
+            <FinanceCard $type="expense">
+              <FinanceCardIcon $color="invoice">
+                <MdCreditCard />
+              </FinanceCardIcon>
+              <FinanceCardContent>
+                <FinanceCardLabel>Faturas Pagas</FinanceCardLabel>
+                <FinanceCardHint>Total de faturas de cartão pagas</FinanceCardHint>
+                <FinanceCardValue>
+                  R$ {totalInvoicePayments.toFixed(2).replace('.', ',')}
+                </FinanceCardValue>
+              </FinanceCardContent>
+            </FinanceCard>
+          )}
         </FinanceCards>
 
         {/* Formulário de Inserção */}
