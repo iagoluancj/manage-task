@@ -10,7 +10,7 @@ export interface Transaction {
     id?: string;
     description: string;
     amount: number;
-    type: 'income' | 'expense'; // 'income' para entradas (+), 'expense' para saídas (-)
+    type: 'income' | 'expense' | 'invoice_payment'; // 'income' para entradas (+), 'expense' para saídas (-), 'invoice_payment' para faturas pagas
     payment_method?: 'credit' | 'debit'; // default credit
     created_at?: string;
     category?: string; // Para futuras categorizações

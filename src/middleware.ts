@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 /**
- * Middleware desativado intencionalmente.
+ * Middleware desativado intencionalmente. a
  * Mantemos a função exportada apenas para deixar explícito
  * que nenhuma lógica adicional é executada durante as requisições.
  */
