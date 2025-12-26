@@ -1874,172 +1874,7 @@ Agendados
 
       <Line />
 
-      {/* Seção de Controle Financeiro */}
-      <FinanceSection>
-        <FinanceHeader>
-          <FinanceTitle>💰 Controle Financeiro</FinanceTitle>
-          <FinanceSubtitle>Gerencie suas entradas e saídas</FinanceSubtitle>
-        </FinanceHeader>
 
-        {/* Cards de Resumo */}
-        <FinanceCards>
-          <FinanceCard $type="expense">
-            <FinanceCardIcon $color="expense">
-              <MdArrowDownward />
-            </FinanceCardIcon>
-            <FinanceCardContent>
-              <FinanceCardLabel>Saídas Totais</FinanceCardLabel>
-              <FinanceCardHint>Todos os lançamentos de saída, crédito e debito.</FinanceCardHint>
-              <FinanceCardValue>
-                R$ {totalExpense.toFixed(2).replace('.', ',')}
-              </FinanceCardValue>
-            </FinanceCardContent>
-          </FinanceCard>
-
-          <FinanceCard $type="income">
-            <FinanceCardIcon $color="income">
-              <MdArrowUpward />
-            </FinanceCardIcon>
-            <FinanceCardContent>
-              <FinanceCardLabel>Total de Entradas</FinanceCardLabel>
-              <FinanceCardValue>
-                R$ {totalIncome.toFixed(2).replace('.', ',')}
-              </FinanceCardValue>
-            </FinanceCardContent>
-          </FinanceCard>
-
-          <FinanceCard $type="expense">
-            <FinanceCardIcon $color="credit">
-              <MdCreditCard />
-            </FinanceCardIcon>
-            <FinanceCardContent>
-              <FinanceCardLabel>Saídas Crédito</FinanceCardLabel>
-              <FinanceCardHint>A pagar até 05 do próximo mês.</FinanceCardHint>
-              <FinanceCardValue>
-                R$ {totalExpenseCredit.toFixed(2).replace('.', ',')}
-              </FinanceCardValue>
-            </FinanceCardContent>
-          </FinanceCard>
-
-          {totalInvoicePayments > 0 && (
-            <FinanceCard $type="expense">
-              <FinanceCardIcon $color="invoice">
-                <MdCreditCard />
-              </FinanceCardIcon>
-              <FinanceCardContent>
-                <FinanceCardLabel>Faturas Pagas</FinanceCardLabel>
-                <FinanceCardHint>Total de faturas de cartão pagas</FinanceCardHint>
-                <FinanceCardValue>
-                  R$ {totalInvoicePayments.toFixed(2).replace('.', ',')}
-                </FinanceCardValue>
-              </FinanceCardContent>
-            </FinanceCard>
-          )}
-        </FinanceCards>
-
-        {/* Formulário de Inserção */}
-        <FinanceForm>
-          <FinanceInputContainer data-finance-input-container>
-            <FinanceInput
-              ref={transactionInputRef}
-              type="text"
-              placeholder="Ex: uber|-33,23 ou Salario|+2759,00"
-              value={newTransaction}
-              onChange={(e) => handleTransactionInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  if (showAutocomplete && selectedSuggestionIndex >= 0 && autocompleteSuggestions[selectedSuggestionIndex]) {
-                    handleSelectSuggestion(autocompleteSuggestions[selectedSuggestionIndex]);
-                  } else {
-                    handleAddTransaction();
-                  }
-                } else if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  setSelectedSuggestionIndex(prev =>
-                    prev < autocompleteSuggestions.length - 1 ? prev + 1 : prev
-                  );
-                } else if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
-                } else if (e.key === 'Escape') {
-                  setShowAutocomplete(false);
-                  setSelectedSuggestionIndex(-1);
-                }
-              }}
-              onFocus={() => {
-                if (autocompleteSuggestions.length > 0) {
-                  setShowAutocomplete(true);
-                }
-              }}
-            />
-            {showAutocomplete && autocompleteSuggestions.length > 0 && (
-              <AutocompleteDropdown>
-                {autocompleteSuggestions.map((suggestion, index) => (
-                  <AutocompleteItem
-                    key={index}
-                    $isSelected={index === selectedSuggestionIndex}
-                    onClick={() => handleSelectSuggestion(suggestion)}
-                    onMouseEnter={() => setSelectedSuggestionIndex(index)}
-                  >
-                    {suggestion}
-                  </AutocompleteItem>
-                ))}
-              </AutocompleteDropdown>
-            )}
-          </FinanceInputContainer>
-          <FinanceButton onClick={handleAddTransaction}>
-            Adicionar
-          </FinanceButton>
-        </FinanceForm>
-
-        {/* Lista de Transações */}
-        <TransactionsList>
-          {transactions.length === 0 ? (
-            <NoTransactions>
-              <span>Nenhuma transação registrada ainda</span>
-              <span>Adicione uma transação usando o formato: descrição|valor</span>
-            </NoTransactions>
-          ) : (
-            transactions.map((transaction) => (
-              <TransactionItem key={transaction.id} $type={transaction.type}>
-                <TransactionInfo >
-                  <div className="flex flex-row gap-2 justify-between">
-                    <TransactionDescription>{transaction.description}</TransactionDescription>
-                    <PaymentTag $method={(transaction.paymentMethod ?? 'credit')}>
-                      {(transaction.paymentMethod ?? 'credit') === 'debit' ? 'Débito' : 'Crédito'}
-                    </PaymentTag>
-                  </div>
-                  <div className="flex flex-row gap-2 justify-between">
-                    <TransactionDate>
-                      {transaction.created_at
-                        ? new Date(transaction.created_at).toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })
-                        : ''}
-                    </TransactionDate>
-                    <TransactionAmount $type={transaction.type}>
-                      {transaction.type === 'income'
-                        ? '+'
-                        : transaction.type === 'invoice_payment'
-                          ? '✓'
-                          : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
-                    </TransactionAmount>
-                  </div>
-                </TransactionInfo>
-
-                <DeleteTransactionButton onClick={() => transaction.id && handleDeleteTransaction(transaction.id)}>
-                  <FaTrash />
-                </DeleteTransactionButton>
-              </TransactionItem>
-            ))
-          )}
-        </TransactionsList>
-      </FinanceSection>
 
     </Container>
 
@@ -2745,6 +2580,9 @@ const QuickNotesSection = styled.div`
   padding: 1.5rem;
   background: transparent;
   border-radius: 16px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 `;
 
 const QuickNotesHeader = styled.div`
@@ -2774,10 +2612,13 @@ const QuickNotesContent = styled.div`
   max-width: 800px;
   margin: 0 auto;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 `;
 
 const QuickNotesDisplay = styled.div`
   width: 100%;
+  min-width: 0;
   background: #1f2937;
   border: 2px solid #374151;
   border-radius: 12px;
@@ -2792,6 +2633,7 @@ const QuickNotesDisplay = styled.div`
   height: auto;
   min-height: auto;
   box-sizing: border-box;
+  display: block;
 
   &:hover {
     border-color: #4b5563;
@@ -2810,6 +2652,7 @@ const QuickNotesDisplay = styled.div`
 
 const QuickNotesTextarea = styled.textarea`
   width: 100%;
+  min-width: 0;
   height: auto;
   min-height: auto;
   background: #1f2937;
