@@ -41,7 +41,7 @@ interface Transaction {
   id?: string;
   description: string;
   amount: number;
-  type: 'income' | 'expense';
+  type: 'income' | 'expense' | 'invoice_payment';
   paymentMethod?: 'credit' | 'debit';
   created_at?: string;
   category?: string;
@@ -688,8 +688,19 @@ Agendados
 
     const description = parts[0].trim();
     let amountStr = parts[1].trim();
-    const methodStr = (parts[2] || '').trim().toLowerCase();
-    const paymentMethod: 'credit' | 'debit' = methodStr === 'debito' ? 'debit' : 'credit';
+    const methodStr = (parts[2] || '').trim();
+
+    // Normaliza "debito" removendo acentos e convertendo para lowercase
+    const normalizeDebito = (str: string) => {
+      return str
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .trim();
+    };
+
+    const normalizedMethod = normalizeDebito(methodStr);
+    const isDebito = normalizedMethod === 'debito' || normalizedMethod === 'debit';
 
     // Verifica se tem sinal explícito
     const isNegative = amountStr.startsWith('-');
@@ -708,8 +719,30 @@ Agendados
       return;
     }
 
-    // Regra solicitada: se não houver '-' (ou '+'), assumir saída; apenas '+' indica entrada
-    const type = hasPositiveSign ? 'income' : 'expense';
+    // Verifica se é pagamento de fatura (aceita variações com/sem acento)
+    const descLower = description.toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, ''); // Remove acentos
+    const isInvoicePayment = (descLower.includes('pagamento') || descLower.includes('pagar')) &&
+      (descLower.includes('fatura') || descLower.includes('fatur')) &&
+      (descLower.includes('cartao') || descLower.includes('credito'));
+
+    // Determina o tipo e método de pagamento
+    let type: 'income' | 'expense' | 'invoice_payment';
+    let paymentMethod: 'credit' | 'debit';
+
+    if (isInvoicePayment) {
+      type = 'invoice_payment';
+      paymentMethod = 'credit'; // Faturas são sempre crédito
+    } else if (hasPositiveSign) {
+      // Entrada sempre é débito
+      type = 'income';
+      paymentMethod = 'debit';
+    } else {
+      // Saída: verifica se foi especificado débito, senão assume crédito
+      type = 'expense';
+      paymentMethod = isDebito ? 'debit' : 'credit';
+    }
 
     try {
       const res = await fetch('/api/transactions', {
@@ -784,6 +817,9 @@ Agendados
     .filter(t => t.type === 'expense' && (t.paymentMethod ?? 'credit') === 'credit')
     .reduce((sum, t) => sum + t.amount, 0);
 
+  const totalInvoicePayments = transactions
+    .filter(t => t.type === 'invoice_payment')
+    .reduce((sum, t) => sum + t.amount, 0);
 
   const getTaskStatus = (startDate: string | number | Date, endDate: string | number | Date) => {
     const now = new Date();
@@ -1373,6 +1409,21 @@ Agendados
               </FinanceCardValue>
             </FinanceCardContent>
           </FinanceCard>
+
+          {totalInvoicePayments > 0 && (
+            <FinanceCard $type="expense">
+              <FinanceCardIcon $color="invoice">
+                <MdCreditCard />
+              </FinanceCardIcon>
+              <FinanceCardContent>
+                <FinanceCardLabel>Faturas Pagas</FinanceCardLabel>
+                <FinanceCardHint>Total de faturas de cartão pagas</FinanceCardHint>
+                <FinanceCardValue>
+                  R$ {totalInvoicePayments.toFixed(2).replace('.', ',')}
+                </FinanceCardValue>
+              </FinanceCardContent>
+            </FinanceCard>
+          )}
         </FinanceCards>
 
         {/* Formulário de Inserção */}
@@ -1469,7 +1520,11 @@ Agendados
                               : ''}
                           </TransactionDate>
                           <TransactionAmount $type={transaction.type}>
-                            {transaction.type === 'income' ? '+' : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
+                            {transaction.type === 'income'
+                              ? '+'
+                              : transaction.type === 'invoice_payment'
+                                ? '✓'
+                                : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
                           </TransactionAmount>
                         </div>
                       </TransactionInfo>
@@ -1953,7 +2008,11 @@ Agendados
                         : ''}
                     </TransactionDate>
                     <TransactionAmount $type={transaction.type}>
-                      {transaction.type === 'income' ? '+' : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
+                      {transaction.type === 'income'
+                        ? '+'
+                        : transaction.type === 'invoice_payment'
+                          ? '✓'
+                          : '-'}R$ {transaction.amount.toFixed(2).replace('.', ',')}
                     </TransactionAmount>
                   </div>
                 </TransactionInfo>
@@ -3147,7 +3206,7 @@ const FinanceCard = styled.div<{ $type: 'income' | 'expense' }>`
   }
 `;
 
-const FinanceCardIcon = styled.div<{ $color?: 'income' | 'expense' | 'credit' }>`
+const FinanceCardIcon = styled.div<{ $color?: 'income' | 'expense' | 'credit' | 'invoice' }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3156,7 +3215,9 @@ const FinanceCardIcon = styled.div<{ $color?: 'income' | 'expense' | 'credit' }>
       ? '#15803d'
       : $color === 'credit'
         ? '#1d4ed8'
-        : '#b91c1c'};
+        : $color === 'invoice'
+          ? '#7c3aed'
+          : '#b91c1c'};
   font-size: 1.25rem;
   flex-shrink: 0;
 
@@ -3327,9 +3388,14 @@ const TransactionsList = styled.div`
   }
 `;
 
-const TransactionItem = styled.div<{ $type: 'income' | 'expense' }>`
+const TransactionItem = styled.div<{ $type: 'income' | 'expense' | 'invoice_payment' }>`
   background: #1f2937;
-  border: 2px solid ${props => props.$type === 'income' ? '#86efac' : '#fca5a5'};
+  border: 2px solid ${props =>
+    props.$type === 'income'
+      ? '#86efac'
+      : props.$type === 'invoice_payment'
+        ? '#a78bfa'
+        : '#fca5a5'};
   border-radius: 12px;
   padding: 0.5rem 0.5rem;
   display: grid;
@@ -3391,10 +3457,15 @@ const TransactionDate = styled.span`
   }
 `;
 
-const TransactionAmount = styled.span<{ $type: 'income' | 'expense' }>`
+const TransactionAmount = styled.span<{ $type: 'income' | 'expense' | 'invoice_payment' }>`
   font-size: 1rem;
   font-weight: 700;
-  color: ${props => props.$type === 'income' ? '#86efac' : '#fca5a5'};
+  color: ${props =>
+    props.$type === 'income'
+      ? '#86efac'
+      : props.$type === 'invoice_payment'
+        ? '#a78bfa'
+        : '#fca5a5'};
   font-family: 'Courier New', monospace;
   white-space: nowrap;
   grid-column: 2 / 3;
