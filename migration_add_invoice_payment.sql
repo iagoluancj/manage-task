@@ -21,3 +21,5 @@ ALTER TABLE transactions
 -- Atualiza comentário
 COMMENT ON COLUMN transactions.type IS 'Tipo: "income" para entradas, "expense" para saídas, "invoice_payment" para faturas pagas';
 
+
+

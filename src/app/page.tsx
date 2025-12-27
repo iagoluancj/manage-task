@@ -804,12 +804,25 @@ Agendados
     }
   };
 
+  // Função para extrair multiplicador da descrição (ex: "BHx3" -> 3, "Valorant x3" -> 3)
+  const getMultiplierFromDescription = (description: string): number => {
+    const match = description.match(/\s*x\s*(\d+)$/i);
+    return match ? parseInt(match[1], 10) : 1;
+  };
+
   // Calcular totais
   const totalIncome = transactions
     .filter(t => t.type === 'income')
     .reduce((sum, t) => sum + t.amount, 0);
 
   const totalExpense = transactions
+    .filter(t => t.type === 'expense')
+    .reduce((sum, t) => {
+      const multiplier = getMultiplierFromDescription(t.description);
+      return sum + (t.amount * multiplier);
+    }, 0);
+
+  const totalExpenseWithoutMultiplier = transactions
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0);
 
@@ -1380,6 +1393,14 @@ Agendados
               <FinanceCardHint>Todos os lançamentos de saída, crédito e debito.</FinanceCardHint>
               <FinanceCardValue>
                 R$ {totalExpense.toFixed(2).replace('.', ',')}
+                {totalExpense !== totalExpenseWithoutMultiplier && (
+                  <>
+
+                    <FinanceCardSecondaryValue>
+                      {'| '}{totalExpenseWithoutMultiplier.toFixed(2).replace('.', ',')}
+                    </FinanceCardSecondaryValue>
+                  </>
+                )}
               </FinanceCardValue>
             </FinanceCardContent>
           </FinanceCard>
@@ -2977,10 +2998,15 @@ const FinanceSection = styled.div`
   background: transparent;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.04);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
     padding: 0.9rem;
     margin-bottom: 0.75rem;
+    width: 100%;
+    max-width: 100%;
   }
 `;
 
@@ -3026,11 +3052,17 @@ const FinanceCards = styled.div`
   flex-direction: row;
   gap: 0.75rem;
   margin-bottom: 1.5rem;
+  flex-wrap: nowrap;
+  width: 100%;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
-    flex-direction: column;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
     gap: 0.6rem;
     margin-bottom: 1rem;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 `;
 
@@ -3056,8 +3088,10 @@ const FinanceCard = styled.div<{ $type: 'income' | 'expense' }>`
   @media (max-width: 768px) {
     padding: 0.8rem 0.9rem;
     gap: 0.55rem;
-    flex: none;
-    width: 100%;
+    flex: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
   }
 
   &::before {
@@ -3112,14 +3146,34 @@ const FinanceCardLabel = styled.span`
 `;
 
 const FinanceCardValue = styled.span`
-  font-size: 1.25rem;
+  font-size: 1.10rem;
   font-weight: 700;
   color: #0f172a;
   font-family: 'Courier New', monospace;
   word-break: break-word;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
 
   @media (max-width: 768px) {
-    font-size: 1.08rem;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.25rem;
+  }
+`;
+
+const FinanceCardSecondaryValue = styled.span`
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #64748b;
+  font-family: 'Courier New', monospace;
+  display: inline;
+  vertical-align: baseline;
+
+  @media (max-width: 768px) {
+    display: inline;
+    vertical-align: baseline;
+    margin-top: 0;
   }
 `;
 
