@@ -834,6 +834,9 @@ Agendados
     .filter(t => t.type === 'invoice_payment')
     .reduce((sum, t) => sum + t.amount, 0);
 
+  // Novo valor de Saídas Crédito (crédito - faturas pagas)
+  const totalExpenseCreditNet = Math.max(0, totalExpenseCredit - totalInvoicePayments);
+
   const getTaskStatus = (startDate: string | number | Date, endDate: string | number | Date) => {
     const now = new Date();
 
@@ -1426,7 +1429,15 @@ Agendados
               <FinanceCardLabel>Saídas Crédito</FinanceCardLabel>
               <FinanceCardHint>A pagar até 05 do próximo mês.</FinanceCardHint>
               <FinanceCardValue>
-                R$ {totalExpenseCredit.toFixed(2).replace('.', ',')}
+                R$ {totalExpenseCreditNet.toFixed(2).replace('.', ',')}
+                {totalExpenseCreditNet !== totalExpenseCredit && (
+                  <>
+                    {' | '}
+                    <FinanceCardSecondaryValue>
+                      {totalExpenseCredit.toFixed(2).replace('.', ',')}
+                    </FinanceCardSecondaryValue>
+                  </>
+                )}
               </FinanceCardValue>
             </FinanceCardContent>
           </FinanceCard>
