@@ -2523,7 +2523,12 @@ Agendados
                   <ExpenseCardsSection>
                     <ExpenseCardsTitle>Categorias inteligentes</ExpenseCardsTitle>
                     <ExpenseCardsScroll>
-                      {month.categoryCards.map((card) => (
+                      {([...month.categoryCards].sort((a, b) => {
+                        if (expenseReportSort === 'count') {
+                          return b.count - a.count || b.total - a.total || a.label.localeCompare(b.label);
+                        }
+                        return b.total - a.total || b.count - a.count || a.label.localeCompare(b.label);
+                      })).map((card) => (
                         <ExpenseSummaryScrollCard key={`category-${card.id}`}>
                           <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
                           <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
