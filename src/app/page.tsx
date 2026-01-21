@@ -2483,51 +2483,55 @@ Agendados
                   <ExpenseMonthTotal>R$ {formatCurrency(month.total)}</ExpenseMonthTotal>
                 </ExpenseMonthHeader>
 
-                {month.topGroupsByCount.length > 0 && (
-                  <ExpenseCardsSection>
-                    <ExpenseCardsTitle>Maior quantidade de itens</ExpenseCardsTitle>
-                    <ExpenseCardsGrid>
-                      {month.topGroupsByCount.map((card) => (
-                        <ExpenseSummaryCard key={`count-${card.id}`}>
-                          <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
-                          <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
-                          <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
-                          <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
-                        </ExpenseSummaryCard>
-                      ))}
-                    </ExpenseCardsGrid>
-                  </ExpenseCardsSection>
-                )}
+                {(month.topGroupsByCount.length > 0 || month.topGroupsByValue.length > 0) && (
+                  <ExpenseCardsRow>
+                    {month.topGroupsByCount.length > 0 && (
+                      <ExpenseCardsColumn>
+                        <ExpenseCardsTitle>Maior quantidade de itens</ExpenseCardsTitle>
+                        <ExpenseCardsGrid>
+                          {month.topGroupsByCount.map((card) => (
+                            <ExpenseSummaryCard key={`count-${card.id}`}>
+                              <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
+                              <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
+                              <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
+                              <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                            </ExpenseSummaryCard>
+                          ))}
+                        </ExpenseCardsGrid>
+                      </ExpenseCardsColumn>
+                    )}
 
-                {month.topGroupsByValue.length > 0 && (
-                  <ExpenseCardsSection>
-                    <ExpenseCardsTitle>Maiores valores totais</ExpenseCardsTitle>
-                    <ExpenseCardsGrid>
-                      {month.topGroupsByValue.map((card) => (
-                        <ExpenseSummaryCard key={`value-${card.id}`}>
-                          <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
-                          <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
-                          <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
-                          <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
-                        </ExpenseSummaryCard>
-                      ))}
-                    </ExpenseCardsGrid>
-                  </ExpenseCardsSection>
+                    {month.topGroupsByValue.length > 0 && (
+                      <ExpenseCardsColumn>
+                        <ExpenseCardsTitle>Maiores valores totais</ExpenseCardsTitle>
+                        <ExpenseCardsGrid>
+                          {month.topGroupsByValue.map((card) => (
+                            <ExpenseSummaryCard key={`value-${card.id}`}>
+                              <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
+                              <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
+                              <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
+                              <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                            </ExpenseSummaryCard>
+                          ))}
+                        </ExpenseCardsGrid>
+                      </ExpenseCardsColumn>
+                    )}
+                  </ExpenseCardsRow>
                 )}
 
                 {month.categoryCards.length > 0 && (
                   <ExpenseCardsSection>
                     <ExpenseCardsTitle>Categorias inteligentes</ExpenseCardsTitle>
-                    <ExpenseCardsGrid>
+                    <ExpenseCardsScroll>
                       {month.categoryCards.map((card) => (
-                        <ExpenseSummaryCard key={`category-${card.id}`}>
+                        <ExpenseSummaryScrollCard key={`category-${card.id}`}>
                           <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
                           <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
                           <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
                           <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
-                        </ExpenseSummaryCard>
+                        </ExpenseSummaryScrollCard>
                       ))}
-                    </ExpenseCardsGrid>
+                    </ExpenseCardsScroll>
                   </ExpenseCardsSection>
                 )}
 
@@ -4329,6 +4333,24 @@ const ExpenseMonthTotal = styled.span`
   border: 1px solid rgba(148, 163, 184, 0.25);
 `;
 
+const ExpenseCardsRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const ExpenseCardsColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+`;
+
 const ExpenseCardsSection = styled.div`
   display: flex;
   flex-direction: column;
@@ -4350,6 +4372,23 @@ const ExpenseCardsGrid = styled.div`
   gap: 0.6rem;
 `;
 
+const ExpenseCardsScroll = styled.div`
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scroll-snap-type: x proximity;
+
+  &::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.3);
+    border-radius: 999px;
+  }
+`;
+
 const ExpenseSummaryCard = styled.div`
   background: rgba(2, 6, 23, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.2);
@@ -4358,6 +4397,11 @@ const ExpenseSummaryCard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+`;
+
+const ExpenseSummaryScrollCard = styled(ExpenseSummaryCard)`
+  flex: 0 0 180px;
+  scroll-snap-align: start;
 `;
 
 const ExpenseSummaryLabel = styled.span`
