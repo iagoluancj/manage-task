@@ -56,6 +56,7 @@ interface ExpenseGroup {
   key: string;
   name: string;
   total: number;
+  count: number;
   items: ExpenseReportItem[];
 }
 
@@ -63,6 +64,7 @@ interface ExpenseSummaryCard {
   id: string;
   label: string;
   total: number;
+  count: number;
   hint: string;
 }
 
@@ -71,8 +73,16 @@ interface ExpenseMonthReport {
   label: string;
   total: number;
   count: number;
-  cards: ExpenseSummaryCard[];
+  cardsByCount: ExpenseSummaryCard[];
+  cardsByValue: ExpenseSummaryCard[];
   groups: ExpenseGroup[];
+}
+
+interface ExpenseCategoryDefinition {
+  id: string;
+  label: string;
+  hint: string;
+  match: (normalizedDescription: string, normalizedCleaned: string) => boolean;
 }
 
 const urgentPulse = keyframes`
@@ -120,12 +130,29 @@ const urgentBounce = keyframes`
 const PADARIA_KEYWORDS = [
   'padaria',
   'lanche',
+  'lanches',
   'coxinha',
   'salgado',
+  'salgados',
   'pastel',
   'pao',
   'pao de queijo',
+  'pao frances',
+  'paozinho',
   'salgadinho',
+  'sanduiche',
+  'sanduba',
+  'hamburguer',
+  'esfiha',
+  'empada',
+  'enroladinho',
+  'kibe',
+  'tapioca',
+  'broa',
+  'rosca',
+  'bolo',
+  'doce',
+  'doceria',
   'lanchonete',
   'padoca',
   'cafeteria',
@@ -135,12 +162,19 @@ const PADARIA_KEYWORDS = [
 const SUPERMERCADO_KEYWORDS = [
   'supermercado',
   'supermecado',
+  'hipermercado',
   'mercado',
+  'mercadinho',
   'atacadao',
+  'atacarejo',
+  'atacadista',
+  'atacado',
   'assai',
   'carrefour',
   'extra',
-  'pao de acucar'
+  'pao de acucar',
+  'sacolao',
+  'hortifruti'
 ];
 
 const FARMACIA_KEYWORDS = [
@@ -148,7 +182,9 @@ const FARMACIA_KEYWORDS = [
   'drogaria',
   'droga',
   'remedio',
+  'remedios',
   'medicamento',
+  'medicamentos',
   'dipirona',
   'paracetamol',
   'ibuprofeno',
@@ -157,7 +193,15 @@ const FARMACIA_KEYWORDS = [
   'dorflex',
   'novalgina',
   'xarope',
-  'vitamina'
+  'vitamina',
+  'pomada',
+  'antibiotico',
+  'antiinflamatorio',
+  'drogasil',
+  'droga raia',
+  'drogaraia',
+  'pacheco',
+  'panvel'
 ];
 
 const normalizeText = (value: string) => {
@@ -217,6 +261,42 @@ const formatDateTime = (dateValue?: string) => {
 const includesKeyword = (value: string, keywords: string[]) => {
   return keywords.some((keyword) => value.includes(keyword));
 };
+
+const MAX_CARD_ITEMS = 3;
+
+const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
+  {
+    id: 'uber-to-aiko',
+    label: 'Uber to Aiko',
+    hint: 'Nome exato da corrida',
+    match: (_normalizedDescription, normalizedCleaned) =>
+      normalizedCleaned === 'uber to aiko' || normalizedCleaned === 'uber aiko'
+  },
+  {
+    id: 'uber',
+    label: 'Uber (geral)',
+    hint: 'Qualquer corrida Uber',
+    match: (normalizedDescription) => normalizedDescription.includes('uber')
+  },
+  {
+    id: 'padaria',
+    label: 'Padaria / Lanche',
+    hint: 'Padaria, salgados e lanches',
+    match: (normalizedDescription) => includesKeyword(normalizedDescription, PADARIA_KEYWORDS)
+  },
+  {
+    id: 'supermercado',
+    label: 'Supermercado',
+    hint: 'Mercados e atacarejos',
+    match: (normalizedDescription) => includesKeyword(normalizedDescription, SUPERMERCADO_KEYWORDS)
+  },
+  {
+    id: 'farmacia',
+    label: 'Farmácia',
+    hint: 'Remédios e drogarias',
+    match: (normalizedDescription) => includesKeyword(normalizedDescription, FARMACIA_KEYWORDS)
+  }
+];
 
 export default function Home() {
   const [editedTopics, setEditedTopics] = useState<Section[]>([]);
@@ -366,6 +446,7 @@ Agendados
   const transactionInputRef = useRef<HTMLInputElement | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+  const [expenseReportSort, setExpenseReportSort] = useState<'count' | 'total'>('count');
 
   // Ajusta a altura do textarea automaticamente
   useEffect(() => {
@@ -996,13 +1077,14 @@ Agendados
 
     const months = Array.from(monthMap.values()).map((month) => {
       const groupsMap = new Map<string, ExpenseGroup>();
-      const cardTotals = {
-        uberToAiko: 0,
-        uber: 0,
-        padaria: 0,
-        supermercado: 0,
-        farmacia: 0
-      };
+      const categoryStats = EXPENSE_CATEGORY_DEFINITIONS.map((definition) => ({
+        id: definition.id,
+        label: definition.label,
+        hint: definition.hint,
+        total: 0,
+        count: 0,
+        match: definition.match
+      }));
       let monthTotal = 0;
 
       month.expenses.forEach((transaction) => {
@@ -1024,84 +1106,62 @@ Agendados
 
         if (existingGroup) {
           existingGroup.total += effectiveAmount;
+          existingGroup.count += 1;
           existingGroup.items.push(nextItem);
         } else {
           groupsMap.set(groupKey, {
             key: groupKey,
             name: displayName,
             total: effectiveAmount,
+            count: 1,
             items: [nextItem]
           });
         }
 
         const normalizedDescription = normalizeText(transaction.description);
-        if (normalizedDescription === 'uber to aiko') {
-          cardTotals.uberToAiko += effectiveAmount;
-        }
-        if (normalizedDescription.includes('uber')) {
-          cardTotals.uber += effectiveAmount;
-        }
-        if (includesKeyword(normalizedDescription, PADARIA_KEYWORDS)) {
-          cardTotals.padaria += effectiveAmount;
-        }
-        if (includesKeyword(normalizedDescription, SUPERMERCADO_KEYWORDS)) {
-          cardTotals.supermercado += effectiveAmount;
-        }
-        if (includesKeyword(normalizedDescription, FARMACIA_KEYWORDS)) {
-          cardTotals.farmacia += effectiveAmount;
-        }
+        const normalizedCleaned = normalizeText(cleanedName || transaction.description);
+        categoryStats.forEach((category) => {
+          if (category.match(normalizedDescription, normalizedCleaned)) {
+            category.total += effectiveAmount;
+            category.count += 1;
+          }
+        });
       });
 
-      const groups = Array.from(groupsMap.values())
-        .map((group) => ({
-          ...group,
-          items: [...group.items].sort((a, b) => {
-            const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
-            const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
-            return timeB - timeA;
-          })
-        }))
-        .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+      const groups = Array.from(groupsMap.values()).map((group) => ({
+        ...group,
+        items: [...group.items].sort((a, b) => {
+          const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return timeB - timeA;
+        })
+      }));
 
-      const cards: ExpenseSummaryCard[] = [
-        {
-          id: 'uber-to-aiko',
-          label: 'Uber to Aiko',
-          total: cardTotals.uberToAiko,
-          hint: 'Corridas com o nome exato'
-        },
-        {
-          id: 'uber',
-          label: 'Uber (geral)',
-          total: cardTotals.uber,
-          hint: 'Tudo que contem "Uber"'
-        },
-        {
-          id: 'padaria',
-          label: 'Padaria / Lanche',
-          total: cardTotals.padaria,
-          hint: 'Padaria, lanches e salgados'
-        },
-        {
-          id: 'supermercado',
-          label: 'Supermercado',
-          total: cardTotals.supermercado,
-          hint: 'Mercados e atacarejos'
-        },
-        {
-          id: 'farmacia',
-          label: 'Farmacia',
-          total: cardTotals.farmacia,
-          hint: 'Remedios e medicamentos'
-        }
-      ].filter(card => card.total > 0);
+      const categoryCards = categoryStats
+        .filter((category) => category.count > 0 || category.total > 0)
+        .map((category) => ({
+          id: category.id,
+          label: category.label,
+          total: category.total,
+          count: category.count,
+          hint: category.hint
+        }));
+
+      const cardsByCount = [...categoryCards]
+        .sort((a, b) => b.count - a.count || b.total - a.total)
+        .slice(0, MAX_CARD_ITEMS);
+
+      const cardsByValue = [...categoryCards]
+        .sort((a, b) => b.total - a.total || b.count - a.count)
+        .slice(0, MAX_CARD_ITEMS);
 
       return {
         key: month.key,
         label: month.label,
         total: monthTotal,
         count: month.expenses.length,
-        cards,
+        cardsByCount,
+        cardsByValue,
         groups
       };
     });
@@ -1116,6 +1176,15 @@ Agendados
       return b.key.localeCompare(a.key);
     });
   }, [transactions]);
+
+  const sortExpenseGroups = (groups: ExpenseGroup[]) => {
+    return [...groups].sort((a, b) => {
+      if (expenseReportSort === 'count') {
+        return b.count - a.count || b.total - a.total || a.name.localeCompare(b.name);
+      }
+      return b.total - a.total || b.count - a.count || a.name.localeCompare(b.name);
+    });
+  };
 
   const getTaskStatus = (startDate: string | number | Date, endDate: string | number | Date) => {
     const now = new Date();
@@ -2192,6 +2261,27 @@ Agendados
           <ExpenseReportSubtitle>
             Visão mensal com agrupamento por nome e detalhes ao expandir
           </ExpenseReportSubtitle>
+          <ExpenseReportControls>
+            <ExpenseSortLabel>Ordenar agrupamentos</ExpenseSortLabel>
+            <ExpenseSortButtons>
+              <ExpenseSortButton
+                type="button"
+                $active={expenseReportSort === 'count'}
+                onClick={() => setExpenseReportSort('count')}
+                aria-pressed={expenseReportSort === 'count'}
+              >
+                Quantidade
+              </ExpenseSortButton>
+              <ExpenseSortButton
+                type="button"
+                $active={expenseReportSort === 'total'}
+                onClick={() => setExpenseReportSort('total')}
+                aria-pressed={expenseReportSort === 'total'}
+              >
+                Valor
+              </ExpenseSortButton>
+            </ExpenseSortButtons>
+          </ExpenseReportControls>
         </ExpenseReportHeader>
 
         {expenseReportByMonth.length === 0 ? (
@@ -2208,23 +2298,46 @@ Agendados
                   <ExpenseMonthTotal>R$ {formatCurrency(month.total)}</ExpenseMonthTotal>
                 </ExpenseMonthHeader>
 
-                {month.cards.length > 0 && (
-                  <ExpenseCardsGrid>
-                    {month.cards.map((card) => (
-                      <ExpenseSummaryCard key={card.id}>
-                        <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
-                        <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
-                        <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
-                      </ExpenseSummaryCard>
-                    ))}
-                  </ExpenseCardsGrid>
+                {month.cardsByCount.length > 0 && (
+                  <ExpenseCardsSection>
+                    <ExpenseCardsTitle>Mais frequentes</ExpenseCardsTitle>
+                    <ExpenseCardsGrid>
+                      {month.cardsByCount.map((card) => (
+                        <ExpenseSummaryCard key={`count-${card.id}`}>
+                          <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
+                          <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
+                          <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
+                          <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                        </ExpenseSummaryCard>
+                      ))}
+                    </ExpenseCardsGrid>
+                  </ExpenseCardsSection>
+                )}
+
+                {month.cardsByValue.length > 0 && (
+                  <ExpenseCardsSection>
+                    <ExpenseCardsTitle>Maiores valores</ExpenseCardsTitle>
+                    <ExpenseCardsGrid>
+                      {month.cardsByValue.map((card) => (
+                        <ExpenseSummaryCard key={`value-${card.id}`}>
+                          <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
+                          <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
+                          <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
+                          <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                        </ExpenseSummaryCard>
+                      ))}
+                    </ExpenseCardsGrid>
+                  </ExpenseCardsSection>
                 )}
 
                 <ExpenseGroupsList>
-                  {month.groups.map((group) => (
+                  {sortExpenseGroups(month.groups).map((group) => (
                     <ExpenseGroup key={group.key}>
                       <ExpenseGroupSummary>
-                        <span>{group.name}</span>
+                        <ExpenseGroupTitle>
+                          <ExpenseGroupName>{group.name}</ExpenseGroupName>
+                          <ExpenseGroupCount>{group.count} itens</ExpenseGroupCount>
+                        </ExpenseGroupTitle>
                         <ExpenseGroupTotal>R$ {formatCurrency(group.total)}</ExpenseGroupTotal>
                       </ExpenseGroupSummary>
                       <ExpenseGroupItems>
@@ -3873,8 +3986,8 @@ const PaginationInfo = styled.span`
 `;
 
 const ExpenseReportSection = styled.section`
-  margin: 1rem 0 2rem;
-  padding: 1.25rem;
+  margin: 0.75rem 0 1.25rem;
+  padding: 1rem;
   background: transparent;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.04);
@@ -3883,17 +3996,21 @@ const ExpenseReportSection = styled.section`
   box-sizing: border-box;
 
   @media (max-width: 768px) {
-    padding: 0.9rem;
+    padding: 0.75rem;
   }
 `;
 
 const ExpenseReportHeader = styled.div`
   text-align: center;
-  margin-bottom: 1.2rem;
+  margin-bottom: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
 `;
 
 const ExpenseReportTitle = styled.h2`
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: #fff;
   margin: 0 0 0.5rem 0;
@@ -3903,19 +4020,57 @@ const ExpenseReportTitle = styled.h2`
   gap: 0.5rem;
 
   @media (max-width: 768px) {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
   }
 `;
 
 const ExpenseReportSubtitle = styled.p`
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   color: #64748b;
   margin: 0;
   font-weight: 500;
 
   @media (max-width: 768px) {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     padding: 0 0.5rem;
+  }
+`;
+
+const ExpenseReportControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: center;
+`;
+
+const ExpenseSortLabel = styled.span`
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+`;
+
+const ExpenseSortButtons = styled.div`
+  display: flex;
+  gap: 0.4rem;
+`;
+
+const ExpenseSortButton = styled.button<{ $active: boolean }>`
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: ${props => (props.$active ? 'rgba(59, 130, 246, 0.25)' : 'rgba(2, 6, 23, 0.4)')};
+  color: ${props => (props.$active ? '#e2e8f0' : '#94a3b8')};
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: rgba(148, 163, 184, 0.5);
+    color: #e2e8f0;
   }
 `;
 
@@ -3931,12 +4086,12 @@ const ExpenseReportEmpty = styled.div`
 const ExpenseReportMonths = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
 `;
 
 const ExpenseMonthCard = styled.div`
   border-radius: 16px;
-  padding: 1rem;
+  padding: 0.85rem;
   background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.18);
 `;
@@ -3946,52 +4101,66 @@ const ExpenseMonthHeader = styled.div`
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.65rem;
   flex-wrap: wrap;
 `;
 
 const ExpenseMonthTitle = styled.h3`
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: #e2e8f0;
   margin: 0;
   font-weight: 700;
 `;
 
 const ExpenseMonthMeta = styled.p`
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: #94a3b8;
   margin: 0.3rem 0 0;
 `;
 
 const ExpenseMonthTotal = styled.span`
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   color: #f8fafc;
   font-weight: 700;
-  padding: 0.35rem 0.75rem;
+  padding: 0.3rem 0.6rem;
   border-radius: 10px;
   background: rgba(15, 23, 42, 0.8);
   border: 1px solid rgba(148, 163, 184, 0.25);
 `;
 
+const ExpenseCardsSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+`;
+
+const ExpenseCardsTitle = styled.span`
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+`;
+
 const ExpenseCardsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.6rem;
 `;
 
 const ExpenseSummaryCard = styled.div`
   background: rgba(2, 6, 23, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 12px;
-  padding: 0.75rem;
+  padding: 0.6rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.25rem;
 `;
 
 const ExpenseSummaryLabel = styled.span`
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #94a3b8;
   font-weight: 700;
   text-transform: uppercase;
@@ -3999,27 +4168,33 @@ const ExpenseSummaryLabel = styled.span`
 `;
 
 const ExpenseSummaryValue = styled.span`
-  font-size: 1.1rem;
+  font-size: 0.98rem;
   font-weight: 700;
   color: #f8fafc;
 `;
 
+const ExpenseSummaryMeta = styled.span`
+  font-size: 0.72rem;
+  color: #cbd5f5;
+  font-weight: 600;
+`;
+
 const ExpenseSummaryHint = styled.span`
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #64748b;
 `;
 
 const ExpenseGroupsList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.6rem;
 `;
 
 const ExpenseGroup = styled.details`
   background: rgba(15, 23, 42, 0.45);
   border: 1px solid rgba(148, 163, 184, 0.15);
   border-radius: 12px;
-  padding: 0.6rem 0.85rem;
+  padding: 0.5rem 0.75rem;
   transition: all 0.2s ease;
 
   &[open] {
@@ -4046,16 +4221,39 @@ const ExpenseGroupSummary = styled.summary`
   font-weight: 600;
 `;
 
+const ExpenseGroupTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+`;
+
+const ExpenseGroupName = styled.span`
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const ExpenseGroupCount = styled.span`
+  font-size: 0.7rem;
+  color: #94a3b8;
+  background: rgba(30, 41, 59, 0.6);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+`;
+
 const ExpenseGroupTotal = styled.span`
   color: #f8fafc;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 `;
 
 const ExpenseGroupItems = styled.div`
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.5rem;
 `;
 
 const ExpenseItem = styled.div`
@@ -4063,7 +4261,7 @@ const ExpenseItem = styled.div`
   justify-content: space-between;
   gap: 1rem;
   align-items: flex-start;
-  padding: 0.6rem 0.7rem;
+  padding: 0.5rem 0.6rem;
   border-radius: 10px;
   background: rgba(2, 6, 23, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.12);
@@ -4082,7 +4280,7 @@ const ExpenseItemInfo = styled.div`
 `;
 
 const ExpenseItemDescription = styled.span`
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   color: #e2e8f0;
   font-weight: 600;
   word-break: break-word;
@@ -4091,7 +4289,7 @@ const ExpenseItemDescription = styled.span`
 const ExpenseItemMeta = styled.div`
   display: flex;
   gap: 0.75rem;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #94a3b8;
   flex-wrap: wrap;
 `;
@@ -4101,7 +4299,7 @@ const ExpenseItemAmount = styled.div`
   flex-direction: column;
   align-items: flex-end;
   gap: 0.25rem;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   color: #f8fafc;
   font-weight: 600;
   white-space: nowrap;
@@ -4112,7 +4310,7 @@ const ExpenseItemAmount = styled.div`
 `;
 
 const ExpenseItemTotal = styled.span`
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   color: #fca5a5;
   font-weight: 700;
 `;
