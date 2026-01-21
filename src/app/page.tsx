@@ -83,7 +83,9 @@ interface ExpenseCategoryDefinition {
   id: string;
   label: string;
   hint: string;
-  match: (normalizedDescription: string, normalizedCleaned: string) => boolean;
+  aliases: string[];
+  keywords: string[];
+  allowOverlap?: boolean;
 }
 
 const urgentPulse = keyframes`
@@ -282,41 +284,194 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     id: 'uber-to-aiko',
     label: 'Uber to Aiko',
     hint: 'Nome exato da corrida',
-    match: (normalizedDescription, normalizedCleaned) =>
-      normalizedCleaned === 'uber to aiko' ||
-      normalizedCleaned === 'uber aiko' ||
-      normalizedDescription === 'uber to aiko' ||
-      normalizedDescription === 'uber aiko'
+    aliases: ['uber to aiko', 'uber aiko'],
+    keywords: [],
+    allowOverlap: true
   },
   {
     id: 'uber',
-    label: 'Uber (geral)',
-    hint: 'Qualquer corrida Uber',
-    match: (normalizedDescription, normalizedCleaned) =>
-      normalizedDescription.includes('uber') || normalizedCleaned.includes('uber')
+    label: 'Transporte (Uber)',
+    hint: 'Corridas e deslocamentos',
+    aliases: ['uber'],
+    keywords: ['uber'],
+    allowOverlap: true
+  },
+  {
+    id: 'refeicoes',
+    label: 'Refeições / Delivery',
+    hint: 'Almoço, pizza e delivery',
+    aliases: [
+      'master',
+      'master grill',
+      'combo ifood',
+      'pizza',
+      'pizza leticia',
+      '2 marmitex',
+      'almoco',
+      'comida natal'
+    ],
+    keywords: ['pizza', 'marmitex', 'almoco', 'ifood', 'combo', 'acai', 'master', 'comida natal']
   },
   {
     id: 'padaria',
     label: 'Padaria / Lanche',
-    hint: 'Padaria, salgados e lanches',
-    match: (normalizedDescription, normalizedCleaned) =>
-      includesKeywordInEither(normalizedDescription, normalizedCleaned, PADARIA_KEYWORDS)
+    hint: 'Salgados, pães e lanches',
+    aliases: [
+      'padaria',
+      'salado',
+      'salgado',
+      'salgado integral',
+      'salgado e agua de coco',
+      'coxinha',
+      'coxinha costela',
+      'coxinha e coca',
+      'pasteis e coxinha',
+      'pastel',
+      'pao',
+      'pao dormido',
+      'pao de queijo',
+      'bolo',
+      'lanche'
+    ],
+    keywords: ['salgad', 'coxinha', 'pastel', 'pao', 'lanche', 'padaria', 'bolo']
   },
   {
-    id: 'supermercado',
-    label: 'Supermercado',
-    hint: 'Mercados e atacarejos',
-    match: (normalizedDescription, normalizedCleaned) =>
-      includesKeywordInEither(normalizedDescription, normalizedCleaned, SUPERMERCADO_KEYWORDS)
+    id: 'mercado',
+    label: 'Mercado / Compras',
+    hint: 'Supermercado e itens domésticos',
+    aliases: [
+      'supermercado',
+      'compra bh',
+      'bh',
+      'bh x3',
+      'bhx3',
+      'acougue',
+      'frango',
+      'mortadela',
+      'duzia ovos',
+      'cafe e acucar',
+      'refrigerante',
+      'refrigerante pai',
+      'sabao em po',
+      'pasta de dente'
+    ],
+    keywords: ['supermercado', 'mercado', 'compra', 'bh', 'acougue', 'frango', 'mortadela', 'ovos', 'cafe', 'acucar', 'refrigerante', 'sabao', 'pasta']
   },
   {
     id: 'farmacia',
-    label: 'Farmácia',
+    label: 'Farmácia / Medicamentos',
     hint: 'Remédios e drogarias',
-    match: (normalizedDescription, normalizedCleaned) =>
-      includesKeywordInEither(normalizedDescription, normalizedCleaned, FARMACIA_KEYWORDS)
+    aliases: [
+      'farmacia',
+      'farmacia tratamento ferida pai',
+      'remedios pai',
+      'remedios pai x4',
+      'dipirona',
+      'ansitec 10mg 60comp'
+    ],
+    keywords: ['farmac', 'drog', 'remedio', 'medicamento', 'dipirona', 'ansitec', 'pomada', 'antibiotico', 'antiinflamatorio']
+  },
+  {
+    id: 'saude-beleza',
+    label: 'Saúde / Beleza',
+    hint: 'Psicólogo, cabelo e unhas',
+    aliases: ['psicologo eny', 'psicologo iago', 'cabelo', 'unha eny', 'sombra eny'],
+    keywords: ['psicolog', 'cabelo', 'unha', 'sombra']
+  },
+  {
+    id: 'assinaturas',
+    label: 'Assinaturas / Serviços',
+    hint: 'Apps, hosts e softwares',
+    aliases: ['supabase', 'supasbase', 'hostinger', 'google fotos', 'amazon prime', 'meli', 'cursor', 'valorant', 'anuncio wa buis'],
+    keywords: ['supabase', 'hostinger', 'google fotos', 'amazon prime', 'meli', 'cursor', 'valorant', 'anuncio', 'wa buis']
+  },
+  {
+    id: 'contas-fixas',
+    label: 'Contas fixas / Telefonia',
+    hint: 'Vivo, TIM e recorrências',
+    aliases: ['vivo', 'credito tim', 'todas contas fixas'],
+    keywords: ['vivo', 'tim', 'contas fixas']
+  },
+  {
+    id: 'financeiro',
+    label: 'Financeiro / Bancos',
+    hint: 'Faturas e bancos',
+    aliases: ['pagamento fatura cartao credito', 'nubank', 'next', 'emprestimo leticia'],
+    keywords: ['fatura', 'cartao', 'nubank', 'next', 'emprestimo']
+  },
+  {
+    id: 'casa',
+    label: 'Casa / Manutenção',
+    hint: 'Itens e reparos domésticos',
+    aliases: [
+      'valvula gas',
+      'torneira e vela p filtro',
+      'suporte e cadeado',
+      'mata mosquito',
+      'gaveteiro',
+      'colchao pai',
+      'bicicleta',
+      'carregador not',
+      'garrafinha pai'
+    ],
+    keywords: ['valvula', 'torneira', 'suporte', 'cadeado', 'gaveteiro', 'colchao', 'bicicleta', 'carregador', 'garrafinha', 'vela']
+  },
+  {
+    id: 'roupas',
+    label: 'Roupas',
+    hint: 'Vestuário',
+    aliases: ['roupa pai', 'roupa eny'],
+    keywords: ['roupa']
+  },
+  {
+    id: 'pets',
+    label: 'Pets',
+    hint: 'Ração e cuidados',
+    aliases: ['racao'],
+    keywords: ['racao']
+  },
+  {
+    id: 'tabaco',
+    label: 'Tabaco / Álcool',
+    hint: 'Cigarros, maconha e bebida',
+    aliases: ['cigarro', 'cigarro eny', 'tres cigarros', 'cigarro e refrigerante', 'baralho cigarros e chiclete', 'eny maconha', 'cerveja eny'],
+    keywords: ['cigarro', 'cigarros', 'maconha', 'cerveja']
+  },
+  {
+    id: 'presentes',
+    label: 'Presentes / Eventos',
+    hint: 'Datas especiais e presentes',
+    aliases: ['presentes natal', 'aniversario', 'revellion vigano'],
+    keywords: ['presente', 'aniversario', 'revellion', 'natal']
   }
 ];
+
+const matchesCategoryDefinition = (
+  normalizedDescription: string,
+  normalizedCleaned: string,
+  definition: ExpenseCategoryDefinition
+) => {
+  const matchesAlias = definition.aliases.some(
+    (alias) => normalizedCleaned === alias || normalizedDescription === alias
+  );
+  const matchesKeyword = includesKeywordInEither(normalizedDescription, normalizedCleaned, definition.keywords);
+  return matchesAlias || matchesKeyword;
+};
+
+const getMatchedCategories = (normalizedDescription: string, normalizedCleaned: string) => {
+  const matches = EXPENSE_CATEGORY_DEFINITIONS.filter((definition) =>
+    matchesCategoryDefinition(normalizedDescription, normalizedCleaned, definition)
+  );
+
+  if (matches.length === 0) {
+    return [];
+  }
+
+  const overlap = matches.filter((definition) => definition.allowOverlap);
+  const exclusive = matches.filter((definition) => !definition.allowOverlap);
+  const primary = exclusive.length > 0 ? [exclusive[0]] : [];
+  return [...primary, ...overlap];
+};
 
 export default function Home() {
   const [editedTopics, setEditedTopics] = useState<Section[]>([]);
@@ -1102,8 +1257,7 @@ Agendados
         label: definition.label,
         hint: definition.hint,
         total: 0,
-        count: 0,
-        match: definition.match
+        count: 0
       }));
       let monthTotal = 0;
 
@@ -1140,10 +1294,12 @@ Agendados
 
         const normalizedDescription = normalizeText(transaction.description);
         const normalizedCleaned = normalizeText(cleanedName || transaction.description);
-        categoryStats.forEach((category) => {
-          if (category.match(normalizedDescription, normalizedCleaned)) {
-            category.total += effectiveAmount;
-            category.count += 1;
+        const matchedCategories = getMatchedCategories(normalizedDescription, normalizedCleaned);
+        matchedCategories.forEach((definition) => {
+          const target = categoryStats.find((category) => category.id === definition.id);
+          if (target) {
+            target.total += effectiveAmount;
+            target.count += 1;
           }
         });
       });
