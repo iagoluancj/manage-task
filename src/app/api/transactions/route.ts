@@ -14,6 +14,7 @@ export interface Transaction {
     payment_method?: 'credit' | 'debit'; // default credit
     created_at?: string;
     category?: string; // Para futuras categorizações
+    tags?: string[] | string | null;
 }
 
 // GET - Buscar todas as transações

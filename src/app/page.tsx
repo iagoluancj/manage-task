@@ -45,6 +45,7 @@ interface Transaction {
   paymentMethod?: 'credit' | 'debit';
   created_at?: string;
   category?: string;
+  tags?: string[] | string | null;
 }
 
 type ExpenseReportItem = Transaction & {
@@ -66,6 +67,7 @@ interface ExpenseSummaryCard {
   total: number;
   count: number;
   hint: string;
+  items: string[];
 }
 
 interface ExpenseMonthReport {
@@ -85,6 +87,7 @@ interface ExpenseCategoryDefinition {
   hint: string;
   aliases: string[];
   keywords: string[];
+  tags: string[];
   allowOverlap?: boolean;
 }
 
@@ -277,7 +280,83 @@ const includesKeywordInEither = (value: string, otherValue: string, keywords: st
   return includesKeyword(value, keywords) || includesKeyword(otherValue, keywords);
 };
 
+const parseTags = (tagsInput?: Transaction['tags']) => {
+  if (!tagsInput) {
+    return [];
+  }
+
+  if (Array.isArray(tagsInput)) {
+    return tagsInput.map((tag) => String(tag).trim()).filter(Boolean);
+  }
+
+  if (typeof tagsInput === 'string') {
+    const trimmed = tagsInput.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map((tag) => String(tag).trim()).filter(Boolean);
+        }
+      } catch (error) {
+        // fallback para split
+      }
+    }
+
+    return trimmed
+      .split(/[;,|]/g)
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
+const getNormalizedTags = (tagsInput?: Transaction['tags']) => {
+  return parseTags(tagsInput).map((tag) => normalizeText(tag)).filter(Boolean);
+};
+
+const matchesTag = (normalizedTags: string[], tagMatchers: string[]) => {
+  return normalizedTags.some((tag) =>
+    tagMatchers.some((matcher) => tag === matcher || tag.includes(matcher))
+  );
+};
+
 const MAX_CARD_ITEMS = 3;
+const MAX_TOOLTIP_ITEMS = 10;
+
+const limitTooltipItems = (items: string[], limit = MAX_TOOLTIP_ITEMS) => {
+  if (items.length <= limit) {
+    return items;
+  }
+
+  return [...items.slice(0, limit), `+${items.length - limit} outros`];
+};
+
+const buildGroupTooltipItems = (items: ExpenseReportItem[]) => {
+  return items
+    .sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return timeB - timeA;
+    })
+    .map((item) => {
+      const cleanedName = stripMultiplierSuffix(item.description) || item.description;
+      const amountLabel = item.multiplier > 1
+        ? `R$ ${formatCurrency(item.effectiveAmount)} (x${item.multiplier})`
+        : `R$ ${formatCurrency(item.amount)}`;
+      return `${cleanedName} - ${amountLabel}`;
+    });
+};
+
+const buildCategoryTooltipItems = (itemsMap: Map<string, number>) => {
+  return Array.from(itemsMap.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([name, count]) => `${name} (${count})`);
+};
 
 const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
   {
@@ -285,6 +364,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     label: 'Uber to Aiko',
     hint: 'Nome exato da corrida',
     aliases: ['uber to aiko', 'uber aiko'],
+    tags: ['uber to aiko', 'uber aiko'],
     keywords: [],
     allowOverlap: true
   },
@@ -293,6 +373,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     label: 'Transporte (Uber)',
     hint: 'Corridas e deslocamentos',
     aliases: ['uber'],
+    tags: ['uber', 'uber aiko', 'uber to aiko', 'transporte'],
     keywords: ['uber'],
     allowOverlap: true
   },
@@ -310,6 +391,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
       'almoco',
       'comida natal'
     ],
+    tags: ['refeicao', 'refeicoes', 'delivery', 'ifood', 'master', 'master grill', 'comida'],
     keywords: ['pizza', 'marmitex', 'almoco', 'ifood', 'combo', 'acai', 'master', 'comida natal']
   },
   {
@@ -333,6 +415,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
       'bolo',
       'lanche'
     ],
+    tags: ['padaria', 'lanche', 'salgado', 'lanchonete'],
     keywords: ['salgad', 'coxinha', 'pastel', 'pao', 'lanche', 'padaria', 'bolo']
   },
   {
@@ -355,6 +438,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
       'sabao em po',
       'pasta de dente'
     ],
+    tags: ['mercado', 'supermercado', 'compra', 'compras', 'acougue'],
     keywords: ['supermercado', 'mercado', 'compra', 'bh', 'acougue', 'frango', 'mortadela', 'ovos', 'cafe', 'acucar', 'refrigerante', 'sabao', 'pasta']
   },
   {
@@ -369,6 +453,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
       'dipirona',
       'ansitec 10mg 60comp'
     ],
+    tags: ['farmacia', 'drogaria', 'remedio', 'medicamento'],
     keywords: ['farmac', 'drog', 'remedio', 'medicamento', 'dipirona', 'ansitec', 'pomada', 'antibiotico', 'antiinflamatorio']
   },
   {
@@ -376,6 +461,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     label: 'Saúde / Beleza',
     hint: 'Psicólogo, cabelo e unhas',
     aliases: ['psicologo eny', 'psicologo iago', 'cabelo', 'unha eny', 'sombra eny'],
+    tags: ['saude', 'beleza', 'psicologo', 'cabelo', 'unha'],
     keywords: ['psicolog', 'cabelo', 'unha', 'sombra']
   },
   {
@@ -383,6 +469,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     label: 'Assinaturas / Serviços',
     hint: 'Apps, hosts e softwares',
     aliases: ['supabase', 'supasbase', 'hostinger', 'google fotos', 'amazon prime', 'meli', 'cursor', 'valorant', 'anuncio wa buis'],
+    tags: ['assinatura', 'servico', 'software', 'host', 'streaming'],
     keywords: ['supabase', 'hostinger', 'google fotos', 'amazon prime', 'meli', 'cursor', 'valorant', 'anuncio', 'wa buis']
   },
   {
@@ -390,6 +477,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     label: 'Contas fixas / Telefonia',
     hint: 'Vivo, TIM e recorrências',
     aliases: ['vivo', 'credito tim', 'todas contas fixas'],
+    tags: ['conta fixa', 'telefonia', 'vivo', 'tim'],
     keywords: ['vivo', 'tim', 'contas fixas']
   },
   {
@@ -397,6 +485,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     label: 'Financeiro / Bancos',
     hint: 'Faturas e bancos',
     aliases: ['pagamento fatura cartao credito', 'nubank', 'next', 'emprestimo leticia'],
+    tags: ['banco', 'fatura', 'cartao', 'emprestimo'],
     keywords: ['fatura', 'cartao', 'nubank', 'next', 'emprestimo']
   },
   {
@@ -414,6 +503,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
       'carregador not',
       'garrafinha pai'
     ],
+    tags: ['casa', 'manutencao', 'utilidades'],
     keywords: ['valvula', 'torneira', 'suporte', 'cadeado', 'gaveteiro', 'colchao', 'bicicleta', 'carregador', 'garrafinha', 'vela']
   },
   {
@@ -421,6 +511,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     label: 'Roupas',
     hint: 'Vestuário',
     aliases: ['roupa pai', 'roupa eny'],
+    tags: ['roupa', 'vestuario'],
     keywords: ['roupa']
   },
   {
@@ -428,6 +519,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     label: 'Pets',
     hint: 'Ração e cuidados',
     aliases: ['racao'],
+    tags: ['pet', 'racao'],
     keywords: ['racao']
   },
   {
@@ -435,6 +527,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     label: 'Tabaco / Álcool',
     hint: 'Cigarros, maconha e bebida',
     aliases: ['cigarro', 'cigarro eny', 'tres cigarros', 'cigarro e refrigerante', 'baralho cigarros e chiclete', 'eny maconha', 'cerveja eny'],
+    tags: ['tabaco', 'cigarro', 'maconha', 'alcool'],
     keywords: ['cigarro', 'cigarros', 'maconha', 'cerveja']
   },
   {
@@ -442,6 +535,7 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     label: 'Presentes / Eventos',
     hint: 'Datas especiais e presentes',
     aliases: ['presentes natal', 'aniversario', 'revellion vigano'],
+    tags: ['presente', 'evento', 'aniversario', 'natal'],
     keywords: ['presente', 'aniversario', 'revellion', 'natal']
   }
 ];
@@ -449,8 +543,13 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
 const matchesCategoryDefinition = (
   normalizedDescription: string,
   normalizedCleaned: string,
+  normalizedTags: string[],
   definition: ExpenseCategoryDefinition
 ) => {
+  if (normalizedTags.length > 0) {
+    return matchesTag(normalizedTags, definition.tags);
+  }
+
   const matchesAlias = definition.aliases.some(
     (alias) => normalizedCleaned === alias || normalizedDescription === alias
   );
@@ -458,9 +557,13 @@ const matchesCategoryDefinition = (
   return matchesAlias || matchesKeyword;
 };
 
-const getMatchedCategories = (normalizedDescription: string, normalizedCleaned: string) => {
+const getMatchedCategories = (
+  normalizedDescription: string,
+  normalizedCleaned: string,
+  normalizedTags: string[]
+) => {
   const matches = EXPENSE_CATEGORY_DEFINITIONS.filter((definition) =>
-    matchesCategoryDefinition(normalizedDescription, normalizedCleaned, definition)
+    matchesCategoryDefinition(normalizedDescription, normalizedCleaned, normalizedTags, definition)
   );
 
   if (matches.length === 0) {
@@ -1257,7 +1360,8 @@ Agendados
         label: definition.label,
         hint: definition.hint,
         total: 0,
-        count: 0
+        count: 0,
+        items: new Map<string, number>()
       }));
       let monthTotal = 0;
 
@@ -1294,12 +1398,19 @@ Agendados
 
         const normalizedDescription = normalizeText(transaction.description);
         const normalizedCleaned = normalizeText(cleanedName || transaction.description);
-        const matchedCategories = getMatchedCategories(normalizedDescription, normalizedCleaned);
+        const normalizedTags = getNormalizedTags(transaction.tags);
+        const matchedCategories = getMatchedCategories(
+          normalizedDescription,
+          normalizedCleaned,
+          normalizedTags
+        );
         matchedCategories.forEach((definition) => {
           const target = categoryStats.find((category) => category.id === definition.id);
           if (target) {
             target.total += effectiveAmount;
             target.count += 1;
+            const currentCount = target.items.get(displayName) ?? 0;
+            target.items.set(displayName, currentCount + 1);
           }
         });
       });
@@ -1318,7 +1429,8 @@ Agendados
         label: group.name,
         total: group.total,
         count: group.count,
-        hint: 'Agrupamento real'
+        hint: 'Agrupamento real',
+        items: limitTooltipItems(buildGroupTooltipItems(group.items))
       }));
 
       const topGroupsByCount = [...groupCards]
@@ -1336,7 +1448,8 @@ Agendados
           label: category.label,
           total: category.total,
           count: category.count,
-          hint: category.hint
+          hint: category.hint,
+          items: limitTooltipItems(buildCategoryTooltipItems(category.items))
         }));
 
       return {
@@ -2495,6 +2608,20 @@ Agendados
                               <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
                               <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
                               <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                          <ExpenseSummaryTooltip>
+                            <ExpenseSummaryTooltipTitle>Itens</ExpenseSummaryTooltipTitle>
+                            <ExpenseSummaryTooltipList>
+                              {card.items.length === 0 ? (
+                                <ExpenseSummaryTooltipItem>Nenhum item encontrado</ExpenseSummaryTooltipItem>
+                              ) : (
+                                card.items.map((item, itemIndex) => (
+                                  <ExpenseSummaryTooltipItem key={`${card.id}-count-${itemIndex}`}>
+                                    {item}
+                                  </ExpenseSummaryTooltipItem>
+                                ))
+                              )}
+                            </ExpenseSummaryTooltipList>
+                          </ExpenseSummaryTooltip>
                             </ExpenseSummaryCard>
                           ))}
                         </ExpenseCardsGrid>
@@ -2511,6 +2638,20 @@ Agendados
                               <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
                               <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
                               <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                          <ExpenseSummaryTooltip>
+                            <ExpenseSummaryTooltipTitle>Itens</ExpenseSummaryTooltipTitle>
+                            <ExpenseSummaryTooltipList>
+                              {card.items.length === 0 ? (
+                                <ExpenseSummaryTooltipItem>Nenhum item encontrado</ExpenseSummaryTooltipItem>
+                              ) : (
+                                card.items.map((item, itemIndex) => (
+                                  <ExpenseSummaryTooltipItem key={`${card.id}-value-${itemIndex}`}>
+                                    {item}
+                                  </ExpenseSummaryTooltipItem>
+                                ))
+                              )}
+                            </ExpenseSummaryTooltipList>
+                          </ExpenseSummaryTooltip>
                             </ExpenseSummaryCard>
                           ))}
                         </ExpenseCardsGrid>
@@ -2534,6 +2675,20 @@ Agendados
                           <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
                           <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
                           <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                          <ExpenseSummaryTooltip>
+                            <ExpenseSummaryTooltipTitle>Itens</ExpenseSummaryTooltipTitle>
+                            <ExpenseSummaryTooltipList>
+                              {card.items.length === 0 ? (
+                                <ExpenseSummaryTooltipItem>Nenhum item encontrado</ExpenseSummaryTooltipItem>
+                              ) : (
+                                card.items.map((item, itemIndex) => (
+                                  <ExpenseSummaryTooltipItem key={`${card.id}-category-${itemIndex}`}>
+                                    {item}
+                                  </ExpenseSummaryTooltipItem>
+                                ))
+                              )}
+                            </ExpenseSummaryTooltipList>
+                          </ExpenseSummaryTooltip>
                         </ExpenseSummaryScrollCard>
                       ))}
                     </ExpenseCardsScroll>
@@ -4381,6 +4536,7 @@ const ExpenseCardsScroll = styled.div`
   display: flex;
   gap: 0.6rem;
   overflow-x: auto;
+  overflow-y: visible;
   padding-bottom: 0.25rem;
   scroll-snap-type: x proximity;
 
@@ -4394,7 +4550,62 @@ const ExpenseCardsScroll = styled.div`
   }
 `;
 
+const ExpenseSummaryTooltip = styled.div`
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 240px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  z-index: 20;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition: all 0.15s ease;
+  pointer-events: none;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.3);
+    border-radius: 999px;
+  }
+`;
+
+const ExpenseSummaryTooltipTitle = styled.span`
+  display: block;
+  font-size: 0.7rem;
+  color: #e2e8f0;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+`;
+
+const ExpenseSummaryTooltipList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+`;
+
+const ExpenseSummaryTooltipItem = styled.li`
+  font-size: 0.72rem;
+  color: #cbd5f5;
+  line-height: 1.2;
+`;
+
 const ExpenseSummaryCard = styled.div`
+  position: relative;
   background: rgba(2, 6, 23, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 12px;
@@ -4402,6 +4613,12 @@ const ExpenseSummaryCard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+
+  &:hover ${ExpenseSummaryTooltip} {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
 `;
 
 const ExpenseSummaryScrollCard = styled(ExpenseSummaryCard)`
