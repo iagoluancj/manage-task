@@ -2291,7 +2291,7 @@ Agendados
             Visão mensal com agrupamento por nome e detalhes ao expandir
           </ExpenseReportSubtitle>
           <ExpenseReportControls>
-            <ExpenseSortLabel>Ordenar agrupamentos</ExpenseSortLabel>
+            <ExpenseSortLabel>Ordenar lista de agrupamentos</ExpenseSortLabel>
             <ExpenseSortButtons>
               <ExpenseSortButton
                 type="button"
@@ -2299,7 +2299,7 @@ Agendados
                 onClick={() => setExpenseReportSort('count')}
                 aria-pressed={expenseReportSort === 'count'}
               >
-                Quantidade
+                Itens
               </ExpenseSortButton>
               <ExpenseSortButton
                 type="button"
@@ -2307,7 +2307,7 @@ Agendados
                 onClick={() => setExpenseReportSort('total')}
                 aria-pressed={expenseReportSort === 'total'}
               >
-                Valor
+                Valores totais
               </ExpenseSortButton>
             </ExpenseSortButtons>
           </ExpenseReportControls>
@@ -2329,7 +2329,7 @@ Agendados
 
                 {month.topGroupsByCount.length > 0 && (
                   <ExpenseCardsSection>
-                    <ExpenseCardsTitle>Top agrupamentos (quantidade)</ExpenseCardsTitle>
+                    <ExpenseCardsTitle>Maior quantidade de itens</ExpenseCardsTitle>
                     <ExpenseCardsGrid>
                       {month.topGroupsByCount.map((card) => (
                         <ExpenseSummaryCard key={`count-${card.id}`}>
@@ -2345,7 +2345,7 @@ Agendados
 
                 {month.topGroupsByValue.length > 0 && (
                   <ExpenseCardsSection>
-                    <ExpenseCardsTitle>Top agrupamentos (valor total)</ExpenseCardsTitle>
+                    <ExpenseCardsTitle>Maiores valores totais</ExpenseCardsTitle>
                     <ExpenseCardsGrid>
                       {month.topGroupsByValue.map((card) => (
                         <ExpenseSummaryCard key={`value-${card.id}`}>
