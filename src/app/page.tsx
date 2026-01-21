@@ -81,16 +81,6 @@ interface ExpenseMonthReport {
   groups: ExpenseGroup[];
 }
 
-interface ExpenseCategoryDefinition {
-  id: string;
-  label: string;
-  hint: string;
-  aliases: string[];
-  keywords: string[];
-  tags: string[];
-  allowOverlap?: boolean;
-}
-
 const urgentPulse = keyframes`
   0% { 
     background: linear-gradient(135deg, #fef2f2 0%, #fecaca 30%, #fef2f2 100%);
@@ -132,91 +122,6 @@ const urgentBounce = keyframes`
     transform: translateY(-1px);
   }
 `;
-
-const PADARIA_KEYWORDS = [
-  'padaria',
-  'lanche',
-  'lanches',
-  'lanch',
-  'coxinha',
-  'salgado',
-  'salgados',
-  'salgad',
-  'pastel',
-  'pao',
-  'pao de queijo',
-  'pao frances',
-  'paozinho',
-  'salgadinho',
-  'sanduiche',
-  'sanduba',
-  'hamburguer',
-  'esfiha',
-  'empada',
-  'enroladinho',
-  'kibe',
-  'tapioca',
-  'broa',
-  'rosca',
-  'bolo',
-  'doce',
-  'doceria',
-  'lanchonete',
-  'padoca',
-  'cafeteria',
-  'cafe'
-];
-
-const SUPERMERCADO_KEYWORDS = [
-  'supermercado',
-  'supermecado',
-  'super mercado',
-  'hipermercado',
-  'mercado',
-  'mercadinho',
-  'atacadao',
-  'atacarejo',
-  'atacadista',
-  'atacado',
-  'assai',
-  'carrefour',
-  'extra',
-  'pao de acucar',
-  'sacolao',
-  'hortifruti'
-];
-
-const FARMACIA_KEYWORDS = [
-  'farmacia',
-  'farmac',
-  'drogaria',
-  'droga',
-  'drog',
-  'remedio',
-  'remedios',
-  'medicamento',
-  'medicamentos',
-  'medicina',
-  'capsula',
-  'comprimido',
-  'dipirona',
-  'paracetamol',
-  'ibuprofeno',
-  'amoxicilina',
-  'omeprazol',
-  'dorflex',
-  'novalgina',
-  'xarope',
-  'vitamina',
-  'pomada',
-  'antibiotico',
-  'antiinflamatorio',
-  'drogasil',
-  'droga raia',
-  'drogaraia',
-  'pacheco',
-  'panvel'
-];
 
 const normalizeText = (value: string) => {
   return value
@@ -272,14 +177,6 @@ const formatDateTime = (dateValue?: string) => {
   });
 };
 
-const includesKeyword = (value: string, keywords: string[]) => {
-  return keywords.some((keyword) => value.includes(keyword));
-};
-
-const includesKeywordInEither = (value: string, otherValue: string, keywords: string[]) => {
-  return includesKeyword(value, keywords) || includesKeyword(otherValue, keywords);
-};
-
 const parseTags = (tagsInput?: Transaction['tags']) => {
   if (!tagsInput) {
     return [];
@@ -313,16 +210,6 @@ const parseTags = (tagsInput?: Transaction['tags']) => {
   }
 
   return [];
-};
-
-const getNormalizedTags = (tagsInput?: Transaction['tags']) => {
-  return parseTags(tagsInput).map((tag) => normalizeText(tag)).filter(Boolean);
-};
-
-const matchesTag = (normalizedTags: string[], tagMatchers: string[]) => {
-  return normalizedTags.some((tag) =>
-    tagMatchers.some((matcher) => tag === matcher || tag.includes(matcher))
-  );
 };
 
 const MAX_CARD_ITEMS = 3;
@@ -366,218 +253,16 @@ const buildTooltipTitle = (items: string[]) => {
   return items.join('\n');
 };
 
-const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
-  {
-    id: 'uber-to-aiko',
-    label: 'Uber to Aiko',
-    hint: 'Nome exato da corrida',
-    aliases: ['uber to aiko', 'uber aiko'],
-    tags: ['uber to aiko', 'uber aiko'],
-    keywords: [],
-    allowOverlap: true
-  },
-  {
-    id: 'uber',
-    label: 'Transporte (Uber)',
-    hint: 'Corridas e deslocamentos',
-    aliases: ['uber'],
-    tags: ['uber', 'uber aiko', 'uber to aiko', 'transporte'],
-    keywords: ['uber'],
-    allowOverlap: true
-  },
-  {
-    id: 'refeicoes',
-    label: 'Refeições / Delivery',
-    hint: 'Almoço, pizza e delivery',
-    aliases: [
-      'master',
-      'master grill',
-      'combo ifood',
-      'pizza',
-      'pizza leticia',
-      '2 marmitex',
-      'almoco',
-      'comida natal'
-    ],
-    tags: ['refeicao', 'refeicoes', 'delivery', 'ifood', 'master', 'master grill', 'comida'],
-    keywords: ['pizza', 'marmitex', 'almoco', 'ifood', 'combo', 'acai', 'master', 'comida natal']
-  },
-  {
-    id: 'padaria',
-    label: 'Padaria / Lanche',
-    hint: 'Salgados, pães e lanches',
-    aliases: [
-      'padaria',
-      'salado',
-      'salgado',
-      'salgado integral',
-      'salgado e agua de coco',
-      'coxinha',
-      'coxinha costela',
-      'coxinha e coca',
-      'pasteis e coxinha',
-      'pastel',
-      'pao',
-      'pao dormido',
-      'pao de queijo',
-      'bolo',
-      'lanche'
-    ],
-    tags: ['padaria', 'lanche', 'salgado', 'lanchonete'],
-    keywords: ['salgad', 'coxinha', 'pastel', 'pao', 'lanche', 'padaria', 'bolo']
-  },
-  {
-    id: 'mercado',
-    label: 'Mercado / Compras',
-    hint: 'Supermercado e itens domésticos',
-    aliases: [
-      'supermercado',
-      'compra bh',
-      'bh',
-      'bh x3',
-      'bhx3',
-      'acougue',
-      'frango',
-      'mortadela',
-      'duzia ovos',
-      'cafe e acucar',
-      'refrigerante',
-      'refrigerante pai',
-      'sabao em po',
-      'pasta de dente'
-    ],
-    tags: ['mercado', 'supermercado', 'compra', 'compras', 'acougue'],
-    keywords: ['supermercado', 'mercado', 'compra', 'bh', 'acougue', 'frango', 'mortadela', 'ovos', 'cafe', 'acucar', 'refrigerante', 'sabao', 'pasta']
-  },
-  {
-    id: 'farmacia',
-    label: 'Farmácia / Medicamentos',
-    hint: 'Remédios e drogarias',
-    aliases: [
-      'farmacia',
-      'farmacia tratamento ferida pai',
-      'remedios pai',
-      'remedios pai x4',
-      'dipirona',
-      'ansitec 10mg 60comp'
-    ],
-    tags: ['farmacia', 'drogaria', 'remedio', 'medicamento'],
-    keywords: ['farmac', 'drog', 'remedio', 'medicamento', 'dipirona', 'ansitec', 'pomada', 'antibiotico', 'antiinflamatorio']
-  },
-  {
-    id: 'saude-beleza',
-    label: 'Saúde / Beleza',
-    hint: 'Psicólogo, cabelo e unhas',
-    aliases: ['psicologo eny', 'psicologo iago', 'cabelo', 'unha eny', 'sombra eny'],
-    tags: ['saude', 'beleza', 'psicologo', 'cabelo', 'unha'],
-    keywords: ['psicolog', 'cabelo', 'unha', 'sombra']
-  },
-  {
-    id: 'assinaturas',
-    label: 'Assinaturas / Serviços',
-    hint: 'Apps, hosts e softwares',
-    aliases: ['supabase', 'supasbase', 'hostinger', 'google fotos', 'amazon prime', 'meli', 'cursor', 'valorant', 'anuncio wa buis'],
-    tags: ['assinatura', 'servico', 'software', 'host', 'streaming'],
-    keywords: ['supabase', 'hostinger', 'google fotos', 'amazon prime', 'meli', 'cursor', 'valorant', 'anuncio', 'wa buis']
-  },
-  {
-    id: 'contas-fixas',
-    label: 'Contas fixas / Telefonia',
-    hint: 'Vivo, TIM e recorrências',
-    aliases: ['vivo', 'credito tim', 'todas contas fixas'],
-    tags: ['conta fixa', 'telefonia', 'vivo', 'tim'],
-    keywords: ['vivo', 'tim', 'contas fixas']
-  },
-  {
-    id: 'financeiro',
-    label: 'Financeiro / Bancos',
-    hint: 'Faturas e bancos',
-    aliases: ['pagamento fatura cartao credito', 'nubank', 'next', 'emprestimo leticia'],
-    tags: ['banco', 'fatura', 'cartao', 'emprestimo'],
-    keywords: ['fatura', 'cartao', 'nubank', 'next', 'emprestimo']
-  },
-  {
-    id: 'casa',
-    label: 'Casa / Manutenção',
-    hint: 'Itens e reparos domésticos',
-    aliases: [
-      'valvula gas',
-      'torneira e vela p filtro',
-      'suporte e cadeado',
-      'mata mosquito',
-      'gaveteiro',
-      'colchao pai',
-      'bicicleta',
-      'carregador not',
-      'garrafinha pai'
-    ],
-    tags: ['casa', 'manutencao', 'utilidades'],
-    keywords: ['valvula', 'torneira', 'suporte', 'cadeado', 'gaveteiro', 'colchao', 'bicicleta', 'carregador', 'garrafinha', 'vela']
-  },
-  {
-    id: 'roupas',
-    label: 'Roupas',
-    hint: 'Vestuário',
-    aliases: ['roupa pai', 'roupa eny'],
-    tags: ['roupa', 'vestuario'],
-    keywords: ['roupa']
-  },
-  {
-    id: 'pets',
-    label: 'Pets',
-    hint: 'Ração e cuidados',
-    aliases: ['racao'],
-    tags: ['pet', 'racao'],
-    keywords: ['racao']
-  },
-  {
-    id: 'tabaco',
-    label: 'Tabaco / Álcool',
-    hint: 'Cigarros, maconha e bebida',
-    aliases: ['cigarro', 'cigarro eny', 'tres cigarros', 'cigarro e refrigerante', 'baralho cigarros e chiclete', 'eny maconha', 'cerveja eny'],
-    tags: ['tabaco', 'cigarro', 'maconha', 'alcool'],
-    keywords: ['cigarro', 'cigarros', 'maconha', 'cerveja']
-  },
-  {
-    id: 'presentes',
-    label: 'Presentes / Eventos',
-    hint: 'Datas especiais e presentes',
-    aliases: ['presentes natal', 'aniversario', 'revellion vigano'],
-    tags: ['presente', 'evento', 'aniversario', 'natal'],
-    keywords: ['presente', 'aniversario', 'revellion', 'natal']
-  }
-];
-
-const matchesCategoryDefinition = (
-  normalizedDescription: string,
-  normalizedCleaned: string,
-  normalizedTags: string[],
-  definition: ExpenseCategoryDefinition
-) => {
-  if (normalizedTags.length === 0) {
-    return false;
+const formatTagLabel = (tag: string) => {
+  if (!tag) {
+    return '';
   }
 
-  return matchesTag(normalizedTags, definition.tags);
-};
-
-const getMatchedCategories = (
-  normalizedDescription: string,
-  normalizedCleaned: string,
-  normalizedTags: string[]
-) => {
-  const matches = EXPENSE_CATEGORY_DEFINITIONS.filter((definition) =>
-    matchesCategoryDefinition(normalizedDescription, normalizedCleaned, normalizedTags, definition)
-  );
-
-  if (matches.length === 0) {
-    return [];
-  }
-
-  const overlap = matches.filter((definition) => definition.allowOverlap);
-  const exclusive = matches.filter((definition) => !definition.allowOverlap);
-  const primary = exclusive.length > 0 ? [exclusive[0]] : [];
-  return [...primary, ...overlap];
+  return tag
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 };
 
 export default function Home() {
@@ -729,6 +414,7 @@ Agendados
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
   const [expenseReportSort, setExpenseReportSort] = useState<'count' | 'total'>('count');
+  const [editingTagId, setEditingTagId] = useState<string | null>(null);
 
   // Ajusta a altura do textarea automaticamente
   useEffect(() => {
@@ -1306,6 +992,38 @@ Agendados
     }
   };
 
+  const handleUpdateTransactionTags = async (id: string, nextTag: string) => {
+    const trimmedTag = nextTag.trim();
+    const tagsPayload = trimmedTag ? [trimmedTag] : [];
+
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, tags: tagsPayload })
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setTransactions(prev =>
+          prev.map((transaction) =>
+            transaction.id === id
+              ? { ...transaction, tags: updated.tags ?? tagsPayload }
+              : transaction
+          )
+        );
+        toast.success('Tag atualizada!', { duration: 2000 });
+      } else {
+        toast.error('Erro ao atualizar tag!');
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar tag:', error);
+      toast.error('Erro ao atualizar tag!');
+    } finally {
+      setEditingTagId(null);
+    }
+  };
+
   // Função para extrair multiplicador da descrição (ex: "BHx3" -> 3, "Valorant x3" -> 3)
   const getMultiplierFromDescription = (description: string): number => {
     const match = description.match(/\s*x\s*(\d+)$/i);
@@ -1339,6 +1057,35 @@ Agendados
   // Novo valor de Saídas Crédito (crédito - faturas pagas)
   const totalExpenseCreditNet = Math.max(0, totalExpenseCredit - totalInvoicePayments);
 
+  const tagOptions = useMemo(() => {
+    const tagsMap = new Map<string, string>();
+    transactions.forEach((transaction) => {
+      parseTags(transaction.tags).forEach((tag) => {
+        const trimmed = tag.trim();
+        if (!trimmed) {
+          return;
+        }
+        const normalized = normalizeText(trimmed);
+        if (!normalized) {
+          return;
+        }
+        if (!tagsMap.has(normalized)) {
+          tagsMap.set(normalized, trimmed);
+        }
+      });
+    });
+
+    return Array.from(tagsMap.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [transactions]);
+
+  const tagOptionsMap = useMemo(() => {
+    const map = new Map<string, string>();
+    tagOptions.forEach((tag) => {
+      map.set(normalizeText(tag), tag);
+    });
+    return map;
+  }, [tagOptions]);
+
   const expenseReportByMonth = useMemo<ExpenseMonthReport[]>(() => {
     const expenses = transactions.filter(t => t.type === 'expense');
     if (expenses.length === 0) {
@@ -1359,14 +1106,7 @@ Agendados
 
     const months = Array.from(monthMap.values()).map((month) => {
       const groupsMap = new Map<string, ExpenseGroup>();
-      const categoryStats = EXPENSE_CATEGORY_DEFINITIONS.map((definition) => ({
-        id: definition.id,
-        label: definition.label,
-        hint: definition.hint,
-        total: 0,
-        count: 0,
-        items: new Map<string, number>()
-      }));
+      const tagStats = new Map<string, { label: string; total: number; count: number; items: Map<string, number> }>();
       let monthTotal = 0;
 
       month.expenses.forEach((transaction) => {
@@ -1400,22 +1140,29 @@ Agendados
           });
         }
 
-        const normalizedDescription = normalizeText(transaction.description);
-        const normalizedCleaned = normalizeText(cleanedName || transaction.description);
-        const normalizedTags = getNormalizedTags(transaction.tags);
-        const matchedCategories = getMatchedCategories(
-          normalizedDescription,
-          normalizedCleaned,
-          normalizedTags
-        );
-        matchedCategories.forEach((definition) => {
-          const target = categoryStats.find((category) => category.id === definition.id);
-          if (target) {
-            target.total += effectiveAmount;
-            target.count += 1;
-            const currentCount = target.items.get(displayName) ?? 0;
-            target.items.set(displayName, currentCount + 1);
+        const parsedTags = parseTags(transaction.tags);
+        parsedTags.forEach((tag) => {
+          const trimmedTag = tag.trim();
+          if (!trimmedTag) {
+            return;
           }
+          const normalizedTag = normalizeText(trimmedTag);
+          if (!normalizedTag) {
+            return;
+          }
+
+          const existing = tagStats.get(normalizedTag) ?? {
+            label: trimmedTag,
+            total: 0,
+            count: 0,
+            items: new Map<string, number>()
+          };
+
+          existing.total += effectiveAmount;
+          existing.count += 1;
+          const currentCount = existing.items.get(displayName) ?? 0;
+          existing.items.set(displayName, currentCount + 1);
+          tagStats.set(normalizedTag, existing);
         });
       });
 
@@ -1445,15 +1192,14 @@ Agendados
         .sort((a, b) => b.total - a.total || b.count - a.count || a.label.localeCompare(b.label))
         .slice(0, MAX_CARD_ITEMS);
 
-      const categoryCards = categoryStats
-        .filter((category) => category.count > 0 || category.total > 0)
-        .map((category) => ({
-          id: category.id,
-          label: category.label,
-          total: category.total,
-          count: category.count,
-          hint: category.hint,
-          items: limitTooltipItems(buildCategoryTooltipItems(category.items))
+      const categoryCards = Array.from(tagStats.entries())
+        .map(([normalizedTag, data]) => ({
+          id: `tag-${normalizedTag}`,
+          label: formatTagLabel(data.label),
+          total: data.total,
+          count: data.count,
+          hint: `Tag: ${data.label}`,
+          items: limitTooltipItems(buildCategoryTooltipItems(data.items))
         }));
 
       return {
@@ -2716,27 +2462,64 @@ Agendados
                         <ExpenseGroupTotal>R$ {formatCurrency(group.total)}</ExpenseGroupTotal>
                       </ExpenseGroupSummary>
                       <ExpenseGroupItems>
-                        {group.items.map((item, index) => (
-                          <ExpenseItem key={item.id ?? `${group.key}-${index}`}>
-                            <ExpenseItemInfo>
-                              <ExpenseItemDescription>{item.description || group.name}</ExpenseItemDescription>
-                              <ExpenseItemMeta>
-                                <span>{formatDateTime(item.created_at)}</span>
-                                <span>{(item.paymentMethod ?? 'credit') === 'debit' ? 'Débito' : 'Crédito'}</span>
-                              </ExpenseItemMeta>
-                            </ExpenseItemInfo>
-                            <ExpenseItemAmount>
-                              {item.multiplier > 1 ? (
-                                <>
-                                  <span>R$ {formatCurrency(item.amount)} x{item.multiplier}</span>
-                                  <ExpenseItemTotal>R$ {formatCurrency(item.effectiveAmount)}</ExpenseItemTotal>
-                                </>
-                              ) : (
-                                <span>R$ {formatCurrency(item.amount)}</span>
-                              )}
-                            </ExpenseItemAmount>
-                          </ExpenseItem>
-                        ))}
+                        {group.items.map((item, index) => {
+                          const itemTags = parseTags(item.tags);
+                          const rawTag = itemTags[0] ?? '';
+                          const normalizedRawTag = rawTag ? normalizeText(rawTag) : '';
+                          const resolvedTag = rawTag
+                            ? (tagOptionsMap.get(normalizedRawTag) ?? rawTag)
+                            : '';
+                          const tagOptionsForItem = rawTag && !tagOptionsMap.has(normalizedRawTag)
+                            ? [rawTag, ...tagOptions]
+                            : tagOptions;
+
+                          return (
+                            <ExpenseItem key={item.id ?? `${group.key}-${index}`}>
+                              <ExpenseItemInfo>
+                                <ExpenseItemDescription>{item.description || group.name}</ExpenseItemDescription>
+                                <ExpenseItemMeta>
+                                  <span>{formatDateTime(item.created_at)}</span>
+                                  <span>{(item.paymentMethod ?? 'credit') === 'debit' ? 'Débito' : 'Crédito'}</span>
+                                </ExpenseItemMeta>
+                                <ExpenseItemTagRow>
+                                  <ExpenseItemTagLabel>Tag</ExpenseItemTagLabel>
+                                  {item.id && editingTagId === item.id ? (
+                                    <ExpenseTagSelect
+                                      value={resolvedTag}
+                                      onChange={(event) => handleUpdateTransactionTags(item.id as string, event.target.value)}
+                                      onBlur={() => setEditingTagId(null)}
+                                    >
+                                      <option value="">Sem tag</option>
+                                      {tagOptionsForItem.map((tagOption) => (
+                                        <option key={`${item.id}-${tagOption}`} value={tagOption}>
+                                          {formatTagLabel(tagOption)}
+                                        </option>
+                                      ))}
+                                    </ExpenseTagSelect>
+                                  ) : (
+                                    <ExpenseTagButton
+                                      type="button"
+                                      onClick={() => item.id && setEditingTagId(item.id)}
+                                      disabled={!item.id}
+                                    >
+                                      {resolvedTag ? formatTagLabel(resolvedTag) : 'Sem tag'}
+                                    </ExpenseTagButton>
+                                  )}
+                                </ExpenseItemTagRow>
+                              </ExpenseItemInfo>
+                              <ExpenseItemAmount>
+                                {item.multiplier > 1 ? (
+                                  <>
+                                    <span>R$ {formatCurrency(item.amount)} x{item.multiplier}</span>
+                                    <ExpenseItemTotal>R$ {formatCurrency(item.effectiveAmount)}</ExpenseItemTotal>
+                                  </>
+                                ) : (
+                                  <span>R$ {formatCurrency(item.amount)}</span>
+                                )}
+                              </ExpenseItemAmount>
+                            </ExpenseItem>
+                          );
+                        })}
                       </ExpenseGroupItems>
                     </ExpenseGroup>
                   ))}
@@ -4369,6 +4152,7 @@ const ExpenseReportSection = styled.section`
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  overflow: visible;
 
   @media (max-width: 768px) {
     padding: 0.75rem;
@@ -4630,7 +4414,12 @@ const ExpenseSummaryCard = styled.div`
   padding: 0.6rem;
   display: block;
 
-  &:hover ${ExpenseSummaryTooltip} {
+  &:hover {
+    z-index: 5;
+  }
+
+  &:hover ${ExpenseSummaryTooltip},
+  &:focus-within ${ExpenseSummaryTooltip} {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
@@ -4793,6 +4582,53 @@ const ExpenseItemMeta = styled.div`
   font-size: 0.7rem;
   color: #94a3b8;
   flex-wrap: wrap;
+`;
+
+const ExpenseItemTagRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+`;
+
+const ExpenseItemTagLabel = styled.span`
+  font-size: 0.62rem;
+  color: #64748b;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+`;
+
+const ExpenseTagButton = styled.button`
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover:not(:disabled) {
+    border-color: rgba(148, 163, 184, 0.6);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+const ExpenseTagSelect = styled.select`
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  outline: none;
 `;
 
 const ExpenseItemAmount = styled.div`

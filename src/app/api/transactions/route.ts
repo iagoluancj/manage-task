@@ -83,6 +83,58 @@ export async function POST(req: NextRequest) {
     }
 }
 
+// PUT - Atualizar tags da transação
+export async function PUT(req: NextRequest) {
+    try {
+        const { id, tags } = await req.json();
+
+        if (!id) {
+            return NextResponse.json(
+                { error: 'ID da transação é obrigatório' },
+                { status: 400 }
+            );
+        }
+
+        let normalizedTags: string[] | null = null;
+
+        if (Array.isArray(tags)) {
+            normalizedTags = tags
+                .map((tag) => String(tag).trim())
+                .filter(Boolean);
+        } else if (typeof tags === 'string') {
+            const trimmed = tags.trim();
+            normalizedTags = trimmed ? [trimmed] : [];
+        }
+
+        if (normalizedTags && normalizedTags.length === 0) {
+            normalizedTags = null;
+        }
+
+        const { data, error } = await supabase
+            .from('transactions')
+            .update({ tags: normalizedTags })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Erro ao atualizar tags:', error);
+            return NextResponse.json(
+                { error: 'Erro ao atualizar tags' },
+                { status: 500 }
+            );
+        }
+
+        return NextResponse.json(data);
+    } catch (error) {
+        console.error('Erro ao processar atualização:', error);
+        return NextResponse.json(
+            { error: 'Erro ao processar atualização' },
+            { status: 500 }
+        );
+    }
+}
+
 // DELETE - Deletar transação
 export async function DELETE(req: NextRequest) {
     try {
