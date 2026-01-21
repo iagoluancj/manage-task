@@ -358,6 +358,14 @@ const buildCategoryTooltipItems = (itemsMap: Map<string, number>) => {
     .map(([name, count]) => `${name} (${count})`);
 };
 
+const buildTooltipTitle = (items: string[]) => {
+  if (items.length === 0) {
+    return 'Nenhum item encontrado';
+  }
+
+  return items.join('\n');
+};
+
 const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
   {
     id: 'uber-to-aiko',
@@ -546,15 +554,11 @@ const matchesCategoryDefinition = (
   normalizedTags: string[],
   definition: ExpenseCategoryDefinition
 ) => {
-  if (normalizedTags.length > 0) {
-    return matchesTag(normalizedTags, definition.tags);
+  if (normalizedTags.length === 0) {
+    return false;
   }
 
-  const matchesAlias = definition.aliases.some(
-    (alias) => normalizedCleaned === alias || normalizedDescription === alias
-  );
-  const matchesKeyword = includesKeywordInEither(normalizedDescription, normalizedCleaned, definition.keywords);
-  return matchesAlias || matchesKeyword;
+  return matchesTag(normalizedTags, definition.tags);
 };
 
 const getMatchedCategories = (
@@ -2604,6 +2608,7 @@ Agendados
                         <ExpenseCardsGrid>
                           {month.topGroupsByCount.map((card) => (
                             <ExpenseSummaryCard key={`count-${card.id}`}>
+                          <ExpenseSummaryCardContent title={buildTooltipTitle(card.items)}>
                               <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
                               <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
                               <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
@@ -2622,6 +2627,7 @@ Agendados
                               )}
                             </ExpenseSummaryTooltipList>
                           </ExpenseSummaryTooltip>
+                          </ExpenseSummaryCardContent>
                             </ExpenseSummaryCard>
                           ))}
                         </ExpenseCardsGrid>
@@ -2634,6 +2640,7 @@ Agendados
                         <ExpenseCardsGrid>
                           {month.topGroupsByValue.map((card) => (
                             <ExpenseSummaryCard key={`value-${card.id}`}>
+                          <ExpenseSummaryCardContent title={buildTooltipTitle(card.items)}>
                               <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
                               <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
                               <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
@@ -2652,6 +2659,7 @@ Agendados
                               )}
                             </ExpenseSummaryTooltipList>
                           </ExpenseSummaryTooltip>
+                          </ExpenseSummaryCardContent>
                             </ExpenseSummaryCard>
                           ))}
                         </ExpenseCardsGrid>
@@ -2671,6 +2679,7 @@ Agendados
                         return b.total - a.total || b.count - a.count || a.label.localeCompare(b.label);
                       })).map((card) => (
                         <ExpenseSummaryScrollCard key={`category-${card.id}`}>
+                          <ExpenseSummaryCardContent title={buildTooltipTitle(card.items)}>
                           <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
                           <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
                           <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
@@ -2689,6 +2698,7 @@ Agendados
                               )}
                             </ExpenseSummaryTooltipList>
                           </ExpenseSummaryTooltip>
+                          </ExpenseSummaryCardContent>
                         </ExpenseSummaryScrollCard>
                       ))}
                     </ExpenseCardsScroll>
@@ -4459,6 +4469,7 @@ const ExpenseMonthCard = styled.div`
   padding: 0.85rem;
   background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.18);
+  overflow: visible;
 `;
 
 const ExpenseMonthHeader = styled.div`
@@ -4498,6 +4509,7 @@ const ExpenseCardsRow = styled.div`
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   margin-bottom: 0.75rem;
+  overflow: visible;
 
   @media (max-width: 900px) {
     grid-template-columns: 1fr;
@@ -4509,6 +4521,7 @@ const ExpenseCardsColumn = styled.div`
   flex-direction: column;
   gap: 0.45rem;
   min-width: 0;
+  overflow: visible;
 `;
 
 const ExpenseCardsSection = styled.div`
@@ -4516,6 +4529,7 @@ const ExpenseCardsSection = styled.div`
   flex-direction: column;
   gap: 0.45rem;
   margin-bottom: 0.75rem;
+  overflow: visible;
 `;
 
 const ExpenseCardsTitle = styled.span`
@@ -4530,6 +4544,7 @@ const ExpenseCardsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.6rem;
+  overflow: visible;
 `;
 
 const ExpenseCardsScroll = styled.div`
@@ -4539,6 +4554,8 @@ const ExpenseCardsScroll = styled.div`
   overflow-y: visible;
   padding-bottom: 0.25rem;
   scroll-snap-type: x proximity;
+  position: relative;
+  z-index: 0;
 
   &::-webkit-scrollbar {
     height: 6px;
@@ -4562,7 +4579,7 @@ const ExpenseSummaryTooltip = styled.div`
   border: 1px solid rgba(148, 163, 184, 0.3);
   border-radius: 10px;
   padding: 0.6rem 0.7rem;
-  z-index: 20;
+  z-index: 30;
   opacity: 0;
   visibility: hidden;
   transform: translateY(6px);
@@ -4606,13 +4623,12 @@ const ExpenseSummaryTooltipItem = styled.li`
 
 const ExpenseSummaryCard = styled.div`
   position: relative;
+  overflow: visible;
   background: rgba(2, 6, 23, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 12px;
   padding: 0.6rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  display: block;
 
   &:hover ${ExpenseSummaryTooltip} {
     opacity: 1;
@@ -4624,6 +4640,13 @@ const ExpenseSummaryCard = styled.div`
 const ExpenseSummaryScrollCard = styled(ExpenseSummaryCard)`
   flex: 0 0 180px;
   scroll-snap-align: start;
+`;
+
+const ExpenseSummaryCardContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: 100%;
 `;
 
 const ExpenseSummaryLabel = styled.span`
