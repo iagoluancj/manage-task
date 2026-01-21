@@ -1,7 +1,7 @@
 "use client";
 
 import styled, { css, keyframes } from "styled-components";
-import { useEffect, useState, useRef, useCallback, FormEvent } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, FormEvent } from "react";
 import { differenceInDays, differenceInHours, isBefore } from "date-fns";
 import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
 import { FaTrash, FaExclamationTriangle, FaClock, FaCheckCircle, FaCalendarAlt } from "react-icons/fa";
@@ -47,6 +47,34 @@ interface Transaction {
   category?: string;
 }
 
+type ExpenseReportItem = Transaction & {
+  multiplier: number;
+  effectiveAmount: number;
+};
+
+interface ExpenseGroup {
+  key: string;
+  name: string;
+  total: number;
+  items: ExpenseReportItem[];
+}
+
+interface ExpenseSummaryCard {
+  id: string;
+  label: string;
+  total: number;
+  hint: string;
+}
+
+interface ExpenseMonthReport {
+  key: string;
+  label: string;
+  total: number;
+  count: number;
+  cards: ExpenseSummaryCard[];
+  groups: ExpenseGroup[];
+}
+
 const urgentPulse = keyframes`
   0% { 
     background: linear-gradient(135deg, #fef2f2 0%, #fecaca 30%, #fef2f2 100%);
@@ -88,6 +116,107 @@ const urgentBounce = keyframes`
     transform: translateY(-1px);
   }
 `;
+
+const PADARIA_KEYWORDS = [
+  'padaria',
+  'lanche',
+  'coxinha',
+  'salgado',
+  'pastel',
+  'pao',
+  'pao de queijo',
+  'salgadinho',
+  'lanchonete',
+  'padoca',
+  'cafeteria',
+  'cafe'
+];
+
+const SUPERMERCADO_KEYWORDS = [
+  'supermercado',
+  'supermecado',
+  'mercado',
+  'atacadao',
+  'assai',
+  'carrefour',
+  'extra',
+  'pao de acucar'
+];
+
+const FARMACIA_KEYWORDS = [
+  'farmacia',
+  'drogaria',
+  'droga',
+  'remedio',
+  'medicamento',
+  'dipirona',
+  'paracetamol',
+  'ibuprofeno',
+  'amoxicilina',
+  'omeprazol',
+  'dorflex',
+  'novalgina',
+  'xarope',
+  'vitamina'
+];
+
+const normalizeText = (value: string) => {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const stripMultiplierSuffix = (value: string) => {
+  return value.replace(/\s*x\s*\d+$/i, '').trim();
+};
+
+const formatCurrency = (value: number) => value.toFixed(2).replace('.', ',');
+
+const formatMonthLabel = (date: Date) => {
+  const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
+
+const getMonthKey = (dateValue?: string) => {
+  if (!dateValue) {
+    return { key: 'sem-data', label: 'Sem data' };
+  }
+
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) {
+    return { key: 'sem-data', label: 'Sem data' };
+  }
+
+  const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  return { key, label: formatMonthLabel(date) };
+};
+
+const formatDateTime = (dateValue?: string) => {
+  if (!dateValue) {
+    return 'Sem data';
+  }
+
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) {
+    return 'Sem data';
+  }
+
+  return date.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const includesKeyword = (value: string, keywords: string[]) => {
+  return keywords.some((keyword) => value.includes(keyword));
+};
 
 export default function Home() {
   const [editedTopics, setEditedTopics] = useState<Section[]>([]);
@@ -617,14 +746,24 @@ Agendados
   }, [isAuthenticated, sortRoutineByTime]);
 
   // Funções para controle financeiro
-  const handleTransactionInput = async (value: string) => {
+  const handleTransactionInput = async (value: string, cursorPosition?: number | null) => {
     setNewTransaction(value);
     setSelectedSuggestionIndex(-1);
+
+    const hasPipe = value.includes('|');
+    const pipeIndex = hasPipe ? value.indexOf('|') : -1;
+    const resolvedCursor = cursorPosition ?? transactionInputRef.current?.selectionStart ?? null;
+
+    // Se o cursor estiver após o "|", não exibe recomendações
+    if (hasPipe && resolvedCursor !== null && resolvedCursor > pipeIndex) {
+      setShowAutocomplete(false);
+      setAutocompleteSuggestions([]);
+      return;
+    }
 
     // Buscar sugestões de autocomplete
     // Busca quando há pelo menos 2 caracteres antes do "|" ou se não há "|" ainda
     if (value.length >= 2) {
-      const hasPipe = value.includes('|');
       const description = hasPipe ? value.split('|')[0] : value;
 
       if (description.trim().length >= 2) {
@@ -836,6 +975,147 @@ Agendados
 
   // Novo valor de Saídas Crédito (crédito - faturas pagas)
   const totalExpenseCreditNet = Math.max(0, totalExpenseCredit - totalInvoicePayments);
+
+  const expenseReportByMonth = useMemo<ExpenseMonthReport[]>(() => {
+    const expenses = transactions.filter(t => t.type === 'expense');
+    if (expenses.length === 0) {
+      return [];
+    }
+
+    const monthMap = new Map<string, { key: string; label: string; expenses: Transaction[] }>();
+
+    expenses.forEach((transaction) => {
+      const { key, label } = getMonthKey(transaction.created_at);
+      const existingMonth = monthMap.get(key);
+      if (existingMonth) {
+        existingMonth.expenses.push(transaction);
+      } else {
+        monthMap.set(key, { key, label, expenses: [transaction] });
+      }
+    });
+
+    const months = Array.from(monthMap.values()).map((month) => {
+      const groupsMap = new Map<string, ExpenseGroup>();
+      const cardTotals = {
+        uberToAiko: 0,
+        uber: 0,
+        padaria: 0,
+        supermercado: 0,
+        farmacia: 0
+      };
+      let monthTotal = 0;
+
+      month.expenses.forEach((transaction) => {
+        const multiplier = getMultiplierFromDescription(transaction.description);
+        const effectiveAmount = transaction.amount * multiplier;
+        monthTotal += effectiveAmount;
+
+        const cleanedName = stripMultiplierSuffix(transaction.description);
+        const displayName = cleanedName || transaction.description || 'Sem descricao';
+        const normalizedName = normalizeText(cleanedName || transaction.description);
+        const groupKey = normalizedName || normalizeText(displayName) || 'sem-descricao';
+
+        const existingGroup = groupsMap.get(groupKey);
+        const nextItem: ExpenseReportItem = {
+          ...transaction,
+          multiplier,
+          effectiveAmount
+        };
+
+        if (existingGroup) {
+          existingGroup.total += effectiveAmount;
+          existingGroup.items.push(nextItem);
+        } else {
+          groupsMap.set(groupKey, {
+            key: groupKey,
+            name: displayName,
+            total: effectiveAmount,
+            items: [nextItem]
+          });
+        }
+
+        const normalizedDescription = normalizeText(transaction.description);
+        if (normalizedDescription === 'uber to aiko') {
+          cardTotals.uberToAiko += effectiveAmount;
+        }
+        if (normalizedDescription.includes('uber')) {
+          cardTotals.uber += effectiveAmount;
+        }
+        if (includesKeyword(normalizedDescription, PADARIA_KEYWORDS)) {
+          cardTotals.padaria += effectiveAmount;
+        }
+        if (includesKeyword(normalizedDescription, SUPERMERCADO_KEYWORDS)) {
+          cardTotals.supermercado += effectiveAmount;
+        }
+        if (includesKeyword(normalizedDescription, FARMACIA_KEYWORDS)) {
+          cardTotals.farmacia += effectiveAmount;
+        }
+      });
+
+      const groups = Array.from(groupsMap.values())
+        .map((group) => ({
+          ...group,
+          items: [...group.items].sort((a, b) => {
+            const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return timeB - timeA;
+          })
+        }))
+        .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+
+      const cards: ExpenseSummaryCard[] = [
+        {
+          id: 'uber-to-aiko',
+          label: 'Uber to Aiko',
+          total: cardTotals.uberToAiko,
+          hint: 'Corridas com o nome exato'
+        },
+        {
+          id: 'uber',
+          label: 'Uber (geral)',
+          total: cardTotals.uber,
+          hint: 'Tudo que contem "Uber"'
+        },
+        {
+          id: 'padaria',
+          label: 'Padaria / Lanche',
+          total: cardTotals.padaria,
+          hint: 'Padaria, lanches e salgados'
+        },
+        {
+          id: 'supermercado',
+          label: 'Supermercado',
+          total: cardTotals.supermercado,
+          hint: 'Mercados e atacarejos'
+        },
+        {
+          id: 'farmacia',
+          label: 'Farmacia',
+          total: cardTotals.farmacia,
+          hint: 'Remedios e medicamentos'
+        }
+      ].filter(card => card.total > 0);
+
+      return {
+        key: month.key,
+        label: month.label,
+        total: monthTotal,
+        count: month.expenses.length,
+        cards,
+        groups
+      };
+    });
+
+    return months.sort((a, b) => {
+      if (a.key === 'sem-data') {
+        return 1;
+      }
+      if (b.key === 'sem-data') {
+        return -1;
+      }
+      return b.key.localeCompare(a.key);
+    });
+  }, [transactions]);
 
   const getTaskStatus = (startDate: string | number | Date, endDate: string | number | Date) => {
     const now = new Date();
@@ -1466,7 +1746,7 @@ Agendados
               type="text"
               placeholder="Ex: uber|-33,23 ou Salario|+2759,00"
               value={newTransaction}
-              onChange={(e) => handleTransactionInput(e.target.value)}
+              onChange={(e) => handleTransactionInput(e.target.value, e.target.selectionStart)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -1905,6 +2185,79 @@ Agendados
       </RoutineSection>
 
       <Line />
+
+      <ExpenseReportSection>
+        <ExpenseReportHeader>
+          <ExpenseReportTitle>📊 Relatório de Despesas</ExpenseReportTitle>
+          <ExpenseReportSubtitle>
+            Visão mensal com agrupamento por nome e detalhes ao expandir
+          </ExpenseReportSubtitle>
+        </ExpenseReportHeader>
+
+        {expenseReportByMonth.length === 0 ? (
+          <ExpenseReportEmpty>Sem despesas registradas ainda.</ExpenseReportEmpty>
+        ) : (
+          <ExpenseReportMonths>
+            {expenseReportByMonth.map((month) => (
+              <ExpenseMonthCard key={month.key}>
+                <ExpenseMonthHeader>
+                  <div>
+                    <ExpenseMonthTitle>{month.label}</ExpenseMonthTitle>
+                    <ExpenseMonthMeta>{month.count} despesas registradas</ExpenseMonthMeta>
+                  </div>
+                  <ExpenseMonthTotal>R$ {formatCurrency(month.total)}</ExpenseMonthTotal>
+                </ExpenseMonthHeader>
+
+                {month.cards.length > 0 && (
+                  <ExpenseCardsGrid>
+                    {month.cards.map((card) => (
+                      <ExpenseSummaryCard key={card.id}>
+                        <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
+                        <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
+                        <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                      </ExpenseSummaryCard>
+                    ))}
+                  </ExpenseCardsGrid>
+                )}
+
+                <ExpenseGroupsList>
+                  {month.groups.map((group) => (
+                    <ExpenseGroup key={group.key}>
+                      <ExpenseGroupSummary>
+                        <span>{group.name}</span>
+                        <ExpenseGroupTotal>R$ {formatCurrency(group.total)}</ExpenseGroupTotal>
+                      </ExpenseGroupSummary>
+                      <ExpenseGroupItems>
+                        {group.items.map((item, index) => (
+                          <ExpenseItem key={item.id ?? `${group.key}-${index}`}>
+                            <ExpenseItemInfo>
+                              <ExpenseItemDescription>{item.description || group.name}</ExpenseItemDescription>
+                              <ExpenseItemMeta>
+                                <span>{formatDateTime(item.created_at)}</span>
+                                <span>{(item.paymentMethod ?? 'credit') === 'debit' ? 'Débito' : 'Crédito'}</span>
+                              </ExpenseItemMeta>
+                            </ExpenseItemInfo>
+                            <ExpenseItemAmount>
+                              {item.multiplier > 1 ? (
+                                <>
+                                  <span>R$ {formatCurrency(item.amount)} x{item.multiplier}</span>
+                                  <ExpenseItemTotal>R$ {formatCurrency(item.effectiveAmount)}</ExpenseItemTotal>
+                                </>
+                              ) : (
+                                <span>R$ {formatCurrency(item.amount)}</span>
+                              )}
+                            </ExpenseItemAmount>
+                          </ExpenseItem>
+                        ))}
+                      </ExpenseGroupItems>
+                    </ExpenseGroup>
+                  ))}
+                </ExpenseGroupsList>
+              </ExpenseMonthCard>
+            ))}
+          </ExpenseReportMonths>
+        )}
+      </ExpenseReportSection>
 
 
 
@@ -3517,4 +3870,249 @@ const PaginationInfo = styled.span`
   @media (max-width: 768px) {
     font-size: 0.8rem;
   }
+`;
+
+const ExpenseReportSection = styled.section`
+  margin: 1rem 0 2rem;
+  padding: 1.25rem;
+  background: transparent;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 0.9rem;
+  }
+`;
+
+const ExpenseReportHeader = styled.div`
+  text-align: center;
+  margin-bottom: 1.2rem;
+`;
+
+const ExpenseReportTitle = styled.h2`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  @media (max-width: 768px) {
+    font-size: 1.25rem;
+  }
+`;
+
+const ExpenseReportSubtitle = styled.p`
+  font-size: 0.9rem;
+  color: #64748b;
+  margin: 0;
+  font-weight: 500;
+
+  @media (max-width: 768px) {
+    font-size: 0.85rem;
+    padding: 0 0.5rem;
+  }
+`;
+
+const ExpenseReportEmpty = styled.div`
+  text-align: center;
+  padding: 2rem;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+`;
+
+const ExpenseReportMonths = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const ExpenseMonthCard = styled.div`
+  border-radius: 16px;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+`;
+
+const ExpenseMonthHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+`;
+
+const ExpenseMonthTitle = styled.h3`
+  font-size: 1.1rem;
+  color: #e2e8f0;
+  margin: 0;
+  font-weight: 700;
+`;
+
+const ExpenseMonthMeta = styled.p`
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0.3rem 0 0;
+`;
+
+const ExpenseMonthTotal = styled.span`
+  font-size: 1.05rem;
+  color: #f8fafc;
+  font-weight: 700;
+  padding: 0.35rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+`;
+
+const ExpenseCardsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+`;
+
+const ExpenseSummaryCard = styled.div`
+  background: rgba(2, 6, 23, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+`;
+
+const ExpenseSummaryLabel = styled.span`
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+`;
+
+const ExpenseSummaryValue = styled.span`
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f8fafc;
+`;
+
+const ExpenseSummaryHint = styled.span`
+  font-size: 0.75rem;
+  color: #64748b;
+`;
+
+const ExpenseGroupsList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const ExpenseGroup = styled.details`
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 12px;
+  padding: 0.6rem 0.85rem;
+  transition: all 0.2s ease;
+
+  &[open] {
+    border-color: rgba(148, 163, 184, 0.3);
+    background: rgba(15, 23, 42, 0.75);
+  }
+
+  summary {
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+`;
+
+const ExpenseGroupSummary = styled.summary`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  color: #e2e8f0;
+  font-weight: 600;
+`;
+
+const ExpenseGroupTotal = styled.span`
+  color: #f8fafc;
+  font-size: 0.95rem;
+`;
+
+const ExpenseGroupItems = styled.div`
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+`;
+
+const ExpenseItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+`;
+
+const ExpenseItemInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+`;
+
+const ExpenseItemDescription = styled.span`
+  font-size: 0.9rem;
+  color: #e2e8f0;
+  font-weight: 600;
+  word-break: break-word;
+`;
+
+const ExpenseItemMeta = styled.div`
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  flex-wrap: wrap;
+`;
+
+const ExpenseItemAmount = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: #f8fafc;
+  font-weight: 600;
+  white-space: nowrap;
+
+  @media (max-width: 768px) {
+    align-items: flex-start;
+  }
+`;
+
+const ExpenseItemTotal = styled.span`
+  font-size: 0.8rem;
+  color: #fca5a5;
+  font-weight: 700;
 `;
