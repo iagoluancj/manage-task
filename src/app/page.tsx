@@ -73,8 +73,9 @@ interface ExpenseMonthReport {
   label: string;
   total: number;
   count: number;
-  cardsByCount: ExpenseSummaryCard[];
-  cardsByValue: ExpenseSummaryCard[];
+  topGroupsByCount: ExpenseSummaryCard[];
+  topGroupsByValue: ExpenseSummaryCard[];
+  categoryCards: ExpenseSummaryCard[];
   groups: ExpenseGroup[];
 }
 
@@ -131,9 +132,11 @@ const PADARIA_KEYWORDS = [
   'padaria',
   'lanche',
   'lanches',
+  'lanch',
   'coxinha',
   'salgado',
   'salgados',
+  'salgad',
   'pastel',
   'pao',
   'pao de queijo',
@@ -162,6 +165,7 @@ const PADARIA_KEYWORDS = [
 const SUPERMERCADO_KEYWORDS = [
   'supermercado',
   'supermecado',
+  'super mercado',
   'hipermercado',
   'mercado',
   'mercadinho',
@@ -179,12 +183,17 @@ const SUPERMERCADO_KEYWORDS = [
 
 const FARMACIA_KEYWORDS = [
   'farmacia',
+  'farmac',
   'drogaria',
   'droga',
+  'drog',
   'remedio',
   'remedios',
   'medicamento',
   'medicamentos',
+  'medicina',
+  'capsula',
+  'comprimido',
   'dipirona',
   'paracetamol',
   'ibuprofeno',
@@ -262,6 +271,10 @@ const includesKeyword = (value: string, keywords: string[]) => {
   return keywords.some((keyword) => value.includes(keyword));
 };
 
+const includesKeywordInEither = (value: string, otherValue: string, keywords: string[]) => {
+  return includesKeyword(value, keywords) || includesKeyword(otherValue, keywords);
+};
+
 const MAX_CARD_ITEMS = 3;
 
 const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
@@ -269,32 +282,39 @@ const EXPENSE_CATEGORY_DEFINITIONS: ExpenseCategoryDefinition[] = [
     id: 'uber-to-aiko',
     label: 'Uber to Aiko',
     hint: 'Nome exato da corrida',
-    match: (_normalizedDescription, normalizedCleaned) =>
-      normalizedCleaned === 'uber to aiko' || normalizedCleaned === 'uber aiko'
+    match: (normalizedDescription, normalizedCleaned) =>
+      normalizedCleaned === 'uber to aiko' ||
+      normalizedCleaned === 'uber aiko' ||
+      normalizedDescription === 'uber to aiko' ||
+      normalizedDescription === 'uber aiko'
   },
   {
     id: 'uber',
     label: 'Uber (geral)',
     hint: 'Qualquer corrida Uber',
-    match: (normalizedDescription) => normalizedDescription.includes('uber')
+    match: (normalizedDescription, normalizedCleaned) =>
+      normalizedDescription.includes('uber') || normalizedCleaned.includes('uber')
   },
   {
     id: 'padaria',
     label: 'Padaria / Lanche',
     hint: 'Padaria, salgados e lanches',
-    match: (normalizedDescription) => includesKeyword(normalizedDescription, PADARIA_KEYWORDS)
+    match: (normalizedDescription, normalizedCleaned) =>
+      includesKeywordInEither(normalizedDescription, normalizedCleaned, PADARIA_KEYWORDS)
   },
   {
     id: 'supermercado',
     label: 'Supermercado',
     hint: 'Mercados e atacarejos',
-    match: (normalizedDescription) => includesKeyword(normalizedDescription, SUPERMERCADO_KEYWORDS)
+    match: (normalizedDescription, normalizedCleaned) =>
+      includesKeywordInEither(normalizedDescription, normalizedCleaned, SUPERMERCADO_KEYWORDS)
   },
   {
     id: 'farmacia',
     label: 'Farmácia',
     hint: 'Remédios e drogarias',
-    match: (normalizedDescription) => includesKeyword(normalizedDescription, FARMACIA_KEYWORDS)
+    match: (normalizedDescription, normalizedCleaned) =>
+      includesKeywordInEither(normalizedDescription, normalizedCleaned, FARMACIA_KEYWORDS)
   }
 ];
 
@@ -1137,6 +1157,22 @@ Agendados
         })
       }));
 
+      const groupCards = groups.map((group) => ({
+        id: `group-${group.key}`,
+        label: group.name,
+        total: group.total,
+        count: group.count,
+        hint: 'Agrupamento real'
+      }));
+
+      const topGroupsByCount = [...groupCards]
+        .sort((a, b) => b.count - a.count || b.total - a.total || a.label.localeCompare(b.label))
+        .slice(0, MAX_CARD_ITEMS);
+
+      const topGroupsByValue = [...groupCards]
+        .sort((a, b) => b.total - a.total || b.count - a.count || a.label.localeCompare(b.label))
+        .slice(0, MAX_CARD_ITEMS);
+
       const categoryCards = categoryStats
         .filter((category) => category.count > 0 || category.total > 0)
         .map((category) => ({
@@ -1147,21 +1183,14 @@ Agendados
           hint: category.hint
         }));
 
-      const cardsByCount = [...categoryCards]
-        .sort((a, b) => b.count - a.count || b.total - a.total)
-        .slice(0, MAX_CARD_ITEMS);
-
-      const cardsByValue = [...categoryCards]
-        .sort((a, b) => b.total - a.total || b.count - a.count)
-        .slice(0, MAX_CARD_ITEMS);
-
       return {
         key: month.key,
         label: month.label,
         total: monthTotal,
         count: month.expenses.length,
-        cardsByCount,
-        cardsByValue,
+        topGroupsByCount,
+        topGroupsByValue,
+        categoryCards,
         groups
       };
     });
@@ -2298,11 +2327,11 @@ Agendados
                   <ExpenseMonthTotal>R$ {formatCurrency(month.total)}</ExpenseMonthTotal>
                 </ExpenseMonthHeader>
 
-                {month.cardsByCount.length > 0 && (
+                {month.topGroupsByCount.length > 0 && (
                   <ExpenseCardsSection>
-                    <ExpenseCardsTitle>Mais frequentes</ExpenseCardsTitle>
+                    <ExpenseCardsTitle>Top agrupamentos (quantidade)</ExpenseCardsTitle>
                     <ExpenseCardsGrid>
-                      {month.cardsByCount.map((card) => (
+                      {month.topGroupsByCount.map((card) => (
                         <ExpenseSummaryCard key={`count-${card.id}`}>
                           <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
                           <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
@@ -2314,12 +2343,28 @@ Agendados
                   </ExpenseCardsSection>
                 )}
 
-                {month.cardsByValue.length > 0 && (
+                {month.topGroupsByValue.length > 0 && (
                   <ExpenseCardsSection>
-                    <ExpenseCardsTitle>Maiores valores</ExpenseCardsTitle>
+                    <ExpenseCardsTitle>Top agrupamentos (valor total)</ExpenseCardsTitle>
                     <ExpenseCardsGrid>
-                      {month.cardsByValue.map((card) => (
+                      {month.topGroupsByValue.map((card) => (
                         <ExpenseSummaryCard key={`value-${card.id}`}>
+                          <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
+                          <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
+                          <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
+                          <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                        </ExpenseSummaryCard>
+                      ))}
+                    </ExpenseCardsGrid>
+                  </ExpenseCardsSection>
+                )}
+
+                {month.categoryCards.length > 0 && (
+                  <ExpenseCardsSection>
+                    <ExpenseCardsTitle>Categorias inteligentes</ExpenseCardsTitle>
+                    <ExpenseCardsGrid>
+                      {month.categoryCards.map((card) => (
+                        <ExpenseSummaryCard key={`category-${card.id}`}>
                           <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
                           <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
                           <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
@@ -4185,9 +4230,18 @@ const ExpenseSummaryHint = styled.span`
 `;
 
 const ExpenseGroupsList = styled.div`
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
   gap: 0.6rem;
+  align-items: start;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
 `;
 
 const ExpenseGroup = styled.details`
@@ -4196,6 +4250,8 @@ const ExpenseGroup = styled.details`
   border-radius: 12px;
   padding: 0.5rem 0.75rem;
   transition: all 0.2s ease;
+  width: 100%;
+  align-self: start;
 
   &[open] {
     border-color: rgba(148, 163, 184, 0.3);
