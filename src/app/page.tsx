@@ -2354,26 +2354,26 @@ Agendados
                         <ExpenseCardsGrid>
                           {month.topGroupsByCount.map((card) => (
                             <ExpenseSummaryCard key={`count-${card.id}`}>
-                          <ExpenseSummaryCardContent title={buildTooltipTitle(card.items)}>
-                              <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
-                              <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
-                              <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
-                              <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
-                          <ExpenseSummaryTooltip>
-                            <ExpenseSummaryTooltipTitle>Itens</ExpenseSummaryTooltipTitle>
-                            <ExpenseSummaryTooltipList>
-                              {card.items.length === 0 ? (
-                                <ExpenseSummaryTooltipItem>Nenhum item encontrado</ExpenseSummaryTooltipItem>
-                              ) : (
-                                card.items.map((item, itemIndex) => (
-                                  <ExpenseSummaryTooltipItem key={`${card.id}-count-${itemIndex}`}>
-                                    {item}
-                                  </ExpenseSummaryTooltipItem>
-                                ))
-                              )}
-                            </ExpenseSummaryTooltipList>
-                          </ExpenseSummaryTooltip>
-                          </ExpenseSummaryCardContent>
+                              <ExpenseSummaryCardContent title={buildTooltipTitle(card.items)}>
+                                <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
+                                <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
+                                <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
+                                <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                                <ExpenseSummaryTooltip>
+                                  <ExpenseSummaryTooltipTitle>Itens</ExpenseSummaryTooltipTitle>
+                                  <ExpenseSummaryTooltipList>
+                                    {card.items.length === 0 ? (
+                                      <ExpenseSummaryTooltipItem>Nenhum item encontrado</ExpenseSummaryTooltipItem>
+                                    ) : (
+                                      card.items.map((item, itemIndex) => (
+                                        <ExpenseSummaryTooltipItem key={`${card.id}-count-${itemIndex}`}>
+                                          {item}
+                                        </ExpenseSummaryTooltipItem>
+                                      ))
+                                    )}
+                                  </ExpenseSummaryTooltipList>
+                                </ExpenseSummaryTooltip>
+                              </ExpenseSummaryCardContent>
                             </ExpenseSummaryCard>
                           ))}
                         </ExpenseCardsGrid>
@@ -2386,26 +2386,26 @@ Agendados
                         <ExpenseCardsGrid>
                           {month.topGroupsByValue.map((card) => (
                             <ExpenseSummaryCard key={`value-${card.id}`}>
-                          <ExpenseSummaryCardContent title={buildTooltipTitle(card.items)}>
-                              <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
-                              <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
-                              <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
-                              <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
-                          <ExpenseSummaryTooltip>
-                            <ExpenseSummaryTooltipTitle>Itens</ExpenseSummaryTooltipTitle>
-                            <ExpenseSummaryTooltipList>
-                              {card.items.length === 0 ? (
-                                <ExpenseSummaryTooltipItem>Nenhum item encontrado</ExpenseSummaryTooltipItem>
-                              ) : (
-                                card.items.map((item, itemIndex) => (
-                                  <ExpenseSummaryTooltipItem key={`${card.id}-value-${itemIndex}`}>
-                                    {item}
-                                  </ExpenseSummaryTooltipItem>
-                                ))
-                              )}
-                            </ExpenseSummaryTooltipList>
-                          </ExpenseSummaryTooltip>
-                          </ExpenseSummaryCardContent>
+                              <ExpenseSummaryCardContent title={buildTooltipTitle(card.items)}>
+                                <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
+                                <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
+                                <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
+                                <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                                <ExpenseSummaryTooltip>
+                                  <ExpenseSummaryTooltipTitle>Itens</ExpenseSummaryTooltipTitle>
+                                  <ExpenseSummaryTooltipList>
+                                    {card.items.length === 0 ? (
+                                      <ExpenseSummaryTooltipItem>Nenhum item encontrado</ExpenseSummaryTooltipItem>
+                                    ) : (
+                                      card.items.map((item, itemIndex) => (
+                                        <ExpenseSummaryTooltipItem key={`${card.id}-value-${itemIndex}`}>
+                                          {item}
+                                        </ExpenseSummaryTooltipItem>
+                                      ))
+                                    )}
+                                  </ExpenseSummaryTooltipList>
+                                </ExpenseSummaryTooltip>
+                              </ExpenseSummaryCardContent>
                             </ExpenseSummaryCard>
                           ))}
                         </ExpenseCardsGrid>
@@ -2426,24 +2426,24 @@ Agendados
                       })).map((card) => (
                         <ExpenseSummaryScrollCard key={`category-${card.id}`}>
                           <ExpenseSummaryCardContent title={buildTooltipTitle(card.items)}>
-                          <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
-                          <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
-                          <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
-                          <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
-                          <ExpenseSummaryTooltip>
-                            <ExpenseSummaryTooltipTitle>Itens</ExpenseSummaryTooltipTitle>
-                            <ExpenseSummaryTooltipList>
-                              {card.items.length === 0 ? (
-                                <ExpenseSummaryTooltipItem>Nenhum item encontrado</ExpenseSummaryTooltipItem>
-                              ) : (
-                                card.items.map((item, itemIndex) => (
-                                  <ExpenseSummaryTooltipItem key={`${card.id}-category-${itemIndex}`}>
-                                    {item}
-                                  </ExpenseSummaryTooltipItem>
-                                ))
-                              )}
-                            </ExpenseSummaryTooltipList>
-                          </ExpenseSummaryTooltip>
+                            <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
+                            <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
+                            <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
+                            <ExpenseSummaryHint>{card.hint}</ExpenseSummaryHint>
+                            <ExpenseSummaryTooltip>
+                              <ExpenseSummaryTooltipTitle>Itens</ExpenseSummaryTooltipTitle>
+                              <ExpenseSummaryTooltipList>
+                                {card.items.length === 0 ? (
+                                  <ExpenseSummaryTooltipItem>Nenhum item encontrado</ExpenseSummaryTooltipItem>
+                                ) : (
+                                  card.items.map((item, itemIndex) => (
+                                    <ExpenseSummaryTooltipItem key={`${card.id}-category-${itemIndex}`}>
+                                      {item}
+                                    </ExpenseSummaryTooltipItem>
+                                  ))
+                                )}
+                              </ExpenseSummaryTooltipList>
+                            </ExpenseSummaryTooltip>
                           </ExpenseSummaryCardContent>
                         </ExpenseSummaryScrollCard>
                       ))}
