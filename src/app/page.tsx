@@ -1,7 +1,7 @@
 "use client";
 
 import styled, { css, keyframes } from "styled-components";
-import { useEffect, useState, useRef, useCallback, useMemo, FormEvent } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { differenceInDays, differenceInHours, isBefore } from "date-fns";
 import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
 import { FaTrash, FaExclamationTriangle, FaClock, FaCheckCircle, FaCalendarAlt } from "react-icons/fa";
@@ -266,6 +266,12 @@ const formatTagLabel = (tag: string) => {
 };
 
 export default function Home() {
+  // Estados de autenticação
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [loginForm, setLoginForm] = useState({ login: '', senha: '' });
+
   const [editedTopics, setEditedTopics] = useState<Section[]>([]);
   const [selectedSection, setSelectedSection] = useState<string>("");
   const [topics, setTopics] = useState<Section[]>([]);
@@ -281,13 +287,6 @@ export default function Home() {
   const [addingTaskIndex, setAddingTaskIndex] = useState<number | null>(null);
   const [pendingDeletions, setPendingDeletions] = useState<{ section: string; topic?: string; task?: string }[]>([]);
 
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [loginInput, setLoginInput] = useState("");
-  const [passwordInput, setPasswordInput] = useState("");
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
-
   // Estados para rotina
   const [newRoutineTime, setNewRoutineTime] = useState("");
   const [newRoutineActivity, setNewRoutineActivity] = useState("");
@@ -296,88 +295,6 @@ export default function Home() {
   const [editingRoutineValue, setEditingRoutineValue] = useState("");
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [lastDate, setLastDate] = useState<string>("");
-
-  const verifySession = useCallback(async () => {
-    try {
-      const response = await fetch("/api/auth", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        setIsAuthenticated(false);
-        return false;
-      }
-
-      const data = await response.json();
-      const authenticated = Boolean(data?.authenticated);
-      setIsAuthenticated(authenticated);
-      return authenticated;
-    } catch (error) {
-      console.error("Erro ao verificar sessão:", error);
-      setIsAuthenticated(false);
-      return false;
-    }
-  }, []);
-
-  useEffect(() => {
-    const initializeAuth = async () => {
-      await verifySession();
-      setIsAuthLoading(false);
-    };
-
-    initializeAuth();
-  }, [verifySession]);
-
-  const handleLogin = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-
-      if (isSubmittingLogin) {
-        return;
-      }
-
-      if (!loginInput.trim() || !passwordInput) {
-        setLoginError("Informe login e senha.");
-        return;
-      }
-
-      setLoginError(null);
-      setIsSubmittingLogin(true);
-
-      try {
-        const response = await fetch("/api/auth", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            login: loginInput.trim(),
-            senha: passwordInput,
-          }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          setLoginError(data?.message ?? "Credenciais inválidas.");
-          setIsAuthenticated(false);
-          return;
-        }
-
-        await verifySession();
-        setIsAuthLoading(false);
-        setLoginInput("");
-        setPasswordInput("");
-        toast.success("Login realizado com sucesso!");
-      } catch (error) {
-        console.error("Erro ao efetuar login:", error);
-        setLoginError("Não foi possível realizar o login. Tente novamente.");
-      } finally {
-        setIsSubmittingLogin(false);
-      }
-    },
-    [isSubmittingLogin, loginInput, passwordInput, verifySession]
-  );
 
   // Estados para notas rápidas
   const [quickNotes, setQuickNotes] = useState(`DE CASA
@@ -722,6 +639,68 @@ Agendados
       }
     } catch (error) {
       console.error('Erro ao salvar rotina:', error);
+    }
+  };
+
+  // Verificar autenticação ao carregar a página
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/auth');
+        const data = await res.json();
+        
+        if (data.authenticated) {
+          setIsAuthenticated(true);
+          setCurrentUser(data.user || 'iago');
+        } else {
+          setIsAuthenticated(false);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar autenticação:', error);
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  // Funções de login e logout
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginForm),
+      });
+
+      const data = await res.json();
+
+      if (data.authenticated) {
+        setIsAuthenticated(true);
+        setCurrentUser(data.user || 'iago');
+        setLoginForm({ login: '', senha: '' });
+        toast.success(`Bem-vindo${data.user === 'leticia' ? 'a' : ''}, ${data.user}!`);
+      } else {
+        toast.error('Credenciais inválidas!');
+      }
+    } catch (error) {
+      console.error('Erro ao fazer login:', error);
+      toast.error('Erro ao fazer login!');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth', { method: 'DELETE' });
+      setIsAuthenticated(false);
+      setCurrentUser('');
+      toast.success('Logout realizado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
     }
   };
 
@@ -1397,7 +1376,7 @@ Agendados
 
   const handleSave = async () => {
     try {
-      // Primeiro, salva as edições das tarefas
+      // Salva o estado completo das tarefas (já inclui todas as deleções feitas no estado local)
       const editRes = await fetch("/api/tasks", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1406,16 +1385,8 @@ Agendados
 
       if (!editRes.ok) throw new Error(`Erro HTTP! Status: ${editRes.status}`);
 
-      // Agora, processa todas as deleções pendentes
-      for (const deletion of pendingDeletions) {
-        const deleteRes = await fetch("/api/tasks", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(deletion),
-        });
-
-        if (!deleteRes.ok) throw new Error(`Erro ao deletar! Status: ${deleteRes.status}`);
-      }
+      // Nota: Não precisamos fazer DELETE separado porque o PUT já salva o estado completo
+      // As tarefas deletadas já foram removidas de editedTopics antes de chegar aqui
 
       // Salva as rotinas
       const routineRes = await fetch("/api/routine", {
@@ -1615,49 +1586,73 @@ Agendados
     />
   );
 
-  if (isAuthLoading) {
+  // Tela de loading
+  if (isLoading) {
     return (
-      <AuthContainer>
-        {toastElement}
-        <AuthCard>
-          <AuthTitle>Verificando sessão...</AuthTitle>
-          <AuthSubtitle>Aguarde um instante enquanto confirmamos suas credenciais.</AuthSubtitle>
-        </AuthCard>
-      </AuthContainer>
+      <Container>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+          <p style={{ color: '#fff', fontSize: '1.2rem' }}>Carregando...</p>
+        </div>
+      </Container>
     );
   }
 
+  // Tela de login
   if (!isAuthenticated) {
     return (
-      <AuthContainer>
-        {toastElement}
-        <AuthCard>
-          <AuthTitle>Bem-vindo</AuthTitle>
-          <AuthSubtitle>Acesse para visualizar suas rotinas e tarefas.</AuthSubtitle>
-          <AuthForm onSubmit={handleLogin}>
-            <AuthInput
-              type="text"
-              placeholder="Usuário"
-              value={loginInput}
-              onChange={(event) => setLoginInput(event.target.value)}
-              autoComplete="username"
-              disabled={isSubmittingLogin}
-            />
-            <AuthInput
-              type="password"
-              placeholder="Senha"
-              value={passwordInput}
-              onChange={(event) => setPasswordInput(event.target.value)}
-              autoComplete="current-password"
-              disabled={isSubmittingLogin}
-            />
-            {loginError && <AuthError>{loginError}</AuthError>}
-            <AuthButton type="submit" disabled={isSubmittingLogin}>
-              {isSubmittingLogin ? "Entrando..." : "Entrar"}
-            </AuthButton>
-          </AuthForm>
-        </AuthCard>
-      </AuthContainer>
+      <Container>
+        <LoginContainer>
+          <LoginCard>
+            <LoginHeader>
+              <FaTasks size={40} color="#667eea" />
+              <LoginTitle>Manage Tasks</LoginTitle>
+              <LoginSubtitle>Faça login para continuar</LoginSubtitle>
+            </LoginHeader>
+            
+            <LoginForm onSubmit={handleLogin}>
+              <LoginInput
+                type="text"
+                placeholder="Login"
+                value={loginForm.login}
+                onChange={(e) => setLoginForm({ ...loginForm, login: e.target.value })}
+                required
+              />
+              <LoginInput
+                type="password"
+                placeholder="Senha"
+                value={loginForm.senha}
+                onChange={(e) => setLoginForm({ ...loginForm, senha: e.target.value })}
+                required
+              />
+              <LoginButton type="submit">Entrar</LoginButton>
+            </LoginForm>
+          </LoginCard>
+        </LoginContainer>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#363636',
+              color: '#fff',
+            },
+            success: {
+              duration: 3000,
+              iconTheme: {
+                primary: '#4ade80',
+                secondary: '#fff',
+              },
+            },
+            error: {
+              duration: 4000,
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#fff',
+              },
+            },
+          }}
+        />
+      </Container>
     );
   }
 
@@ -1666,6 +1661,9 @@ Agendados
       {toastElement}
       <Header>
         <Title className="flex items-center gap-4"><FaTasks size={30} /> <span>Manage Tasks</span></Title>
+        <LogoutButton onClick={handleLogout}>
+          Sair ({currentUser})
+        </LogoutButton>
       </Header>
       <Line />
 
@@ -1861,7 +1859,7 @@ Agendados
             <FinanceInput
               ref={transactionInputRef}
               type="text"
-              placeholder="Ex: uber|-33,23 ou Salario|+2759,00"
+              placeholder="Ex: uber|33,23 --- Salario|+2759,00 --- Pagamento Fatura Cartão Crédito|2000,00"
               value={newTransaction}
               onChange={(e) => handleTransactionInput(e.target.value, e.target.selectionStart)}
               onKeyDown={(e) => {
@@ -2164,7 +2162,8 @@ Agendados
 
       <Line />
 
-      {/* Seção de Rotina do Dia */}
+      {/* Seção de Rotina do Dia - Ocultar para Leticia */}
+      {currentUser !== 'leticia' && (
       <RoutineSection>
         <RoutineHeader>
           <RoutineTitle>
@@ -2300,6 +2299,7 @@ Agendados
           )}
         </RoutineContent>
       </RoutineSection>
+      )}
 
       <Line />
 
@@ -2541,103 +2541,9 @@ interface SectionContainerProps {
   $isVisible: boolean;
 }
 
-const AuthContainer = styled.div`
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  background: linear-gradient(135deg, #0f172a 0%, #1f2937 50%, #111827 100%);
-`;
-
-const AuthCard = styled.div`
-  width: 100%;
-  max-width: 380px;
-  background: rgba(17, 24, 39, 0.9);
-  border-radius: 20px;
-  padding: 2.25rem 2rem;
-  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.45);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  text-align: center;
-`;
-
-const AuthTitle = styled.h1`
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #f8fafc;
-  margin: 0;
-`;
-
-const AuthSubtitle = styled.p`
-  font-size: 0.95rem;
-  color: #cbd5f5;
-  margin: 0 auto;
-  max-width: 260px;
-  line-height: 1.5;
-`;
-
-const AuthForm = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-`;
-
-const AuthInput = styled.input`
-  width: 100%;
-  padding: 0.85rem 1rem;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  background: #0f172a;
-  color: #e2e8f0;
-  font-size: 1rem;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-
-  &:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-`;
-
-const AuthButton = styled.button`
-  padding: 0.85rem 1rem;
-  border-radius: 12px;
-  border: none;
-  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-  color: #f8fafc;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-
-  &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.35);
-  }
-
-  &:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
-`;
-
-const AuthError = styled.span`
-  color: #fca5a5;
-  font-size: 0.85rem;
-  text-align: left;
-`;
-
 const EditableInput = styled.input` 
   outline: none;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.95);
   border: none;
   border-bottom: 2px solid #3b82f6;
   color: #1f2937;
@@ -2646,17 +2552,22 @@ const EditableInput = styled.input`
   width: auto;
   min-width: 120px;
   display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px 4px 0 0;
   
   &:focus {
     border-bottom: 2px solid #1d4ed8;
-    background: rgba(59, 130, 246, 0.05);
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
   }
 
   @media (prefers-color-scheme: dark) {
+    background: rgba(31, 41, 55, 0.95);
     color: #f3f4f6;
     
     &:focus {
-      background: rgba(59, 130, 246, 0.2);
+      background: rgba(31, 41, 55, 1);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
     }
   }
 `;
@@ -2714,9 +2625,43 @@ const NewTopic = styled.div`
 
   select {
     outline: none;
-    padding: 0rem .2rem;
-    border-radius: 15px 15px 0px 0px;
-    border: 1px solid #0070f3;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    border: 2px solid #3b82f6;
+    background: #ffffff;
+    color: #1f2937;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    
+    &:focus {
+      border-color: #1d4ed8;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    option {
+      background: #ffffff;
+      color: #1f2937;
+      padding: 0.5rem;
+      font-weight: 500;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      background: #1f2937;
+      color: #f3f4f6;
+      border-color: #3b82f6;
+      
+      option {
+        background: #1f2937;
+        color: #f3f4f6;
+      }
+    }
   }
 `;
 
@@ -3403,6 +3348,139 @@ const Container = styled.div`
 
   @media (max-width: 768px) {
     padding: 4px 4px 16px;
+  }
+`;
+
+const LoginContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 1rem;
+`;
+
+const LoginCard = styled.div`
+  background: #1f2937;
+  border: 2px solid #374151;
+  border-radius: 16px;
+  padding: 2.5rem;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+
+  @media (max-width: 768px) {
+    padding: 2rem;
+  }
+`;
+
+const LoginHeader = styled.div`
+  text-align: center;
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+`;
+
+const LoginTitle = styled.h1`
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+`;
+
+const LoginSubtitle = styled.p`
+  font-size: 0.95rem;
+  color: #9ca3af;
+  margin: 0;
+`;
+
+const LoginForm = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const LoginInput = styled.input`
+  padding: 0.875rem 1rem;
+  border: 2px solid #374151;
+  border-radius: 8px;
+  background: #111827;
+  color: #e5e7eb;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.2s ease;
+
+  &::placeholder {
+    color: #6b7280;
+  }
+
+  &:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  }
+
+  @media (max-width: 768px) {
+    font-size: 16px;
+    padding: 1rem;
+  }
+`;
+
+const LoginButton = styled.button`
+  padding: 0.875rem 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 0.5rem;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+`;
+
+const LogoutButton = styled.button`
+  position: fixed;
+  top: 2rem;
+  right: 1rem;
+  padding: 0.5rem 1rem;
+  background: rgba(31, 41, 55, 0.95);
+  color: #9ca3af;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 1000;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+
+  &:hover {
+    background: #374151;
+    color: #fff;
+    border-color: #4b5563;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  @media (max-width: 768px) {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.7rem;
+    top: 1rem;
+    right: 0.5rem;
   }
 `;
 

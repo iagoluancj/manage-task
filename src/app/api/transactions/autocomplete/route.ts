@@ -6,9 +6,22 @@ const supabase = createClient(
     process.env.SUPABASE_KEY!
 );
 
+// Helper para pegar o usuário do cookie
+function getUserFromRequest(req: NextRequest): string {
+  const user = req.cookies.get('app_user')?.value || 'iago';
+  return user;
+}
+
+// Helper para pegar o nome da tabela baseado no usuário
+function getTableName(user: string): string {
+  return user === 'leticia' ? 'leticia_transactions' : 'transactions';
+}
+
 // GET - Buscar descrições para autocomplete
 export async function GET(req: NextRequest) {
     try {
+        const user = getUserFromRequest(req);
+        const tableName = getTableName(user);
         const { searchParams } = new URL(req.url);
         const query = searchParams.get('q') || '';
 
@@ -17,7 +30,7 @@ export async function GET(req: NextRequest) {
         }
 
         const { data, error } = await supabase
-            .from('transactions')
+            .from(tableName)
             .select('description')
             .ilike('description', `%${query}%`)
             .order('created_at', { ascending: false })

@@ -17,11 +17,25 @@ export interface Transaction {
     tags?: string[] | string | null;
 }
 
+// Helper para pegar o usuário do cookie
+function getUserFromRequest(req: NextRequest): string {
+  const user = req.cookies.get('app_user')?.value || 'iago';
+  return user;
+}
+
+// Helper para pegar o nome da tabela baseado no usuário
+function getTableName(user: string): string {
+  return user === 'leticia' ? 'leticia_transactions' : 'transactions';
+}
+
 // GET - Buscar todas as transações
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
+        const user = getUserFromRequest(req);
+        const tableName = getTableName(user);
+        
         const { data, error } = await supabase
-            .from('transactions')
+            .from(tableName)
             .select('*')
             .order('created_at', { ascending: false });
 
@@ -40,6 +54,8 @@ export async function GET() {
 // POST - Criar nova transação
 export async function POST(req: NextRequest) {
     try {
+        const user = getUserFromRequest(req);
+        const tableName = getTableName(user);
         const { description, amount, type, paymentMethod } = await req.json();
 
         if (!description || amount === undefined || !type) {
@@ -52,7 +68,7 @@ export async function POST(req: NextRequest) {
         const payment_method: 'credit' | 'debit' = paymentMethod === 'debit' ? 'debit' : 'credit';
 
         const { data, error } = await supabase
-            .from('transactions')
+            .from(tableName)
             .insert([
                 {
                     description: description.trim(),
@@ -86,6 +102,8 @@ export async function POST(req: NextRequest) {
 // PUT - Atualizar tags da transação
 export async function PUT(req: NextRequest) {
     try {
+        const user = getUserFromRequest(req);
+        const tableName = getTableName(user);
         const { id, tags } = await req.json();
 
         if (!id) {
@@ -111,7 +129,7 @@ export async function PUT(req: NextRequest) {
         }
 
         const { data, error } = await supabase
-            .from('transactions')
+            .from(tableName)
             .update({ tags: normalizedTags })
             .eq('id', id)
             .select()
@@ -138,6 +156,8 @@ export async function PUT(req: NextRequest) {
 // DELETE - Deletar transação
 export async function DELETE(req: NextRequest) {
     try {
+        const user = getUserFromRequest(req);
+        const tableName = getTableName(user);
         const { id } = await req.json();
 
         if (!id) {
@@ -148,7 +168,7 @@ export async function DELETE(req: NextRequest) {
         }
 
         const { error } = await supabase
-            .from('transactions')
+            .from(tableName)
             .delete()
             .eq('id', id);
 

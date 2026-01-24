@@ -6,10 +6,24 @@ const supabase = createClient(
     process.env.SUPABASE_KEY!
 );
 
-export async function GET() {
+// Helper para pegar o usuário do cookie
+function getUserFromRequest(req: NextRequest): string {
+  const user = req.cookies.get('app_user')?.value || 'iago';
+  return user;
+}
+
+// Helper para pegar o nome da tabela baseado no usuário
+function getTableName(user: string): string {
+  return user === 'leticia' ? 'leticia_quick_notes' : 'quick_notes';
+}
+
+export async function GET(req: NextRequest) {
     try {
+        const user = getUserFromRequest(req);
+        const tableName = getTableName(user);
+        
         const { data, error } = await supabase
-            .from('quick_notes')
+            .from(tableName)
             .select('*')
             .single();
 
@@ -49,10 +63,12 @@ Agendados
 
 export async function PUT(req: NextRequest) {
     try {
+        const user = getUserFromRequest(req);
+        const tableName = getTableName(user);
         const { notes } = await req.json();
 
         const { data, error } = await supabase
-            .from('quick_notes')
+            .from(tableName)
             .upsert({ id: 1, notes })
             .select()
             .single();

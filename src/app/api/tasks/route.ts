@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -25,10 +25,21 @@ type Section = {
 
 type TasksType = Section[];
 
+// Helper para pegar o usuário do cookie
+function getUserFromRequest(req: NextRequest): string {
+  const user = req.cookies.get('app_user')?.value || 'iago';
+  return user;
+}
+
+// Helper para pegar o nome da tabela baseado no usuário
+function getTableName(user: string): string {
+  return user === 'leticia' ? 'leticia_json_data' : 'json_data';
+}
+
 // Função para salvar os dados no Supabaseb
-async function saveTasksToDB(newTasks: TasksType) {
+async function saveTasksToDB(newTasks: TasksType, tableName: string) {
   const { error } = await supabase
-    .from('json_data')
+    .from(tableName)
     .update({ data: newTasks })
     .eq('name', 'Planejamento');
 
@@ -36,9 +47,9 @@ async function saveTasksToDB(newTasks: TasksType) {
 }
 
 // Método GET para buscar as tarefas
-async function fetchTasksFromDB() {
+async function fetchTasksFromDB(tableName: string) {
   const { data, error } = await supabase
-    .from('json_data')
+    .from(tableName)
     .select('data')
     .eq('name', 'Planejamento') // <- ou 'Planejamento', se for esse o nome usado
     .single();
@@ -52,18 +63,22 @@ async function fetchTasksFromDB() {
 }
 
 // Rota GET
-export async function GET() {
+export async function GET(req: NextRequest) {
   console.log("GET /api/tasks chamado");
-
-  const tasks = await fetchTasksFromDB();
+  
+  const user = getUserFromRequest(req);
+  const tableName = getTableName(user);
+  const tasks = await fetchTasksFromDB(tableName);
 
   // Garante que o retorno é sempre um array
   return NextResponse.json(tasks || []);
 }
 
 // Método POST para adicionar novas tarefas
-export async function POST(req: Request) {
-  const tasks = await fetchTasksFromDB();
+export async function POST(req: NextRequest) {
+  const user = getUserFromRequest(req);
+  const tableName = getTableName(user);
+  const tasks = await fetchTasksFromDB(tableName);
   if (!tasks) return NextResponse.json({ error: "Erro ao carregar dados." }, { status: 500 });
 
   const { section, topic, task } = await req.json();
@@ -82,16 +97,18 @@ export async function POST(req: Request) {
     tasks.push({ section, sectionitens: [{ topic, tasks: [task] }] });
   }
 
-  await saveTasksToDB(tasks);
+  await saveTasksToDB(tasks, tableName);
 
   return NextResponse.json({ message: "Tarefa adicionada com sucesso!" });
 }
 
-export async function PUT(req: Request) {
+export async function PUT(req: NextRequest) {
   try {
+    const user = getUserFromRequest(req);
+    const tableName = getTableName(user);
     const updatedTasks: TasksType = await req.json();
 
-    await saveTasksToDB(updatedTasks);
+    await saveTasksToDB(updatedTasks, tableName);
 
     return NextResponse.json({ message: "Tarefas atualizadas com sucesso!" }, { status: 200 });
   } catch (error) {
@@ -100,11 +117,13 @@ export async function PUT(req: Request) {
 }
 
 
-export async function DELETE(req: Request) {
+export async function DELETE(req: NextRequest) {
   try {
+    const user = getUserFromRequest(req);
+    const tableName = getTableName(user);
     const { section, topic, task } = await req.json();
 
-    const tasks = await fetchTasksFromDB();
+    const tasks = await fetchTasksFromDB(tableName);
     if (!tasks) {
       return NextResponse.json({ error: "Erro ao carregar tarefas." }, { status: 500 });
     }
@@ -130,7 +149,7 @@ export async function DELETE(req: Request) {
       tasks[sectionIndex].sectionitens.splice(topicIndex, 1);
     }
 
-    await saveTasksToDB(tasks);
+    await saveTasksToDB(tasks, tableName);
 
     return NextResponse.json({ message: "Remoção realizada com sucesso!" }, { status: 200 });
   } catch (error) {
