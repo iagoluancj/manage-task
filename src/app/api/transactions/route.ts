@@ -40,11 +40,29 @@ export async function GET() {
 // POST - Criar nova transação
 export async function POST(req: NextRequest) {
     try {
-        const { description, amount, type, paymentMethod } = await req.json();
+        const { description, amount, type, paymentMethod, tags } = await req.json();
 
         if (!description || amount === undefined || !type) {
             return NextResponse.json(
                 { error: 'Descrição, valor e tipo são obrigatórios' },
+                { status: 400 }
+            );
+        }
+
+        let normalizedTags: string[] | null = null;
+
+        if (Array.isArray(tags)) {
+            normalizedTags = tags
+                .map((tag) => String(tag).trim())
+                .filter(Boolean);
+        } else if (typeof tags === 'string') {
+            const trimmed = tags.trim();
+            normalizedTags = trimmed ? [trimmed] : [];
+        }
+
+        if (!normalizedTags || normalizedTags.length === 0) {
+            return NextResponse.json(
+                { error: 'Tag é obrigatória' },
                 { status: 400 }
             );
         }
@@ -59,6 +77,7 @@ export async function POST(req: NextRequest) {
                     amount: Math.abs(amount), // Sempre positivo, o tipo define se é entrada ou saída
                     type: type,
                     payment_method,
+                    tags: normalizedTags,
                     created_at: new Date().toISOString()
                 }
             ])

@@ -407,6 +407,7 @@ Agendados
   // Estados para controle financeiro
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [newTransaction, setNewTransaction] = useState("");
+  const [newTransactionTag, setNewTransactionTag] = useState("");
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
@@ -867,6 +868,11 @@ Agendados
       return;
     }
 
+    if (!newTransactionTag.trim()) {
+      toast.error("Selecione uma tag!");
+      return;
+    }
+
     // Parse do formato: "descrição|valor" ou "descrição|valor|debito"
     const parts = newTransaction.split('|');
     if (parts.length < 2) {
@@ -940,7 +946,8 @@ Agendados
           description,
           amount: Math.abs(amount),
           type,
-          paymentMethod
+          paymentMethod,
+          tags: [newTransactionTag.trim()]
         }),
       });
 
@@ -1906,6 +1913,20 @@ Agendados
               </AutocompleteDropdown>
             )}
           </FinanceInputContainer>
+          <FinanceTagContainer>
+            <FinanceTagLabel>Tag</FinanceTagLabel>
+            <FinanceTagSelect
+              value={newTransactionTag}
+              onChange={(event) => setNewTransactionTag(event.target.value)}
+            >
+              <option value="">Selecione</option>
+              {tagOptions.map((tagOption) => (
+                <option key={tagOption} value={tagOption}>
+                  {formatTagLabel(tagOption)}
+                </option>
+              ))}
+            </FinanceTagSelect>
+          </FinanceTagContainer>
           <FinanceButton onClick={handleAddTransaction}>
             Adicionar
           </FinanceButton>
@@ -2353,8 +2374,8 @@ Agendados
                         <ExpenseCardsTitle>Maior quantidade de itens</ExpenseCardsTitle>
                         <ExpenseCardsGrid>
                           {month.topGroupsByCount.map((card) => (
-                            <ExpenseSummaryCard key={`count-${card.id}`}>
-                          <ExpenseSummaryCardContent title={buildTooltipTitle(card.items)}>
+                        <ExpenseSummaryCard key={`count-${card.id}`} title={buildTooltipTitle(card.items)}>
+                          <ExpenseSummaryCardContent>
                               <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
                               <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
                               <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
@@ -2385,8 +2406,8 @@ Agendados
                         <ExpenseCardsTitle>Maiores valores totais</ExpenseCardsTitle>
                         <ExpenseCardsGrid>
                           {month.topGroupsByValue.map((card) => (
-                            <ExpenseSummaryCard key={`value-${card.id}`}>
-                          <ExpenseSummaryCardContent title={buildTooltipTitle(card.items)}>
+                        <ExpenseSummaryCard key={`value-${card.id}`} title={buildTooltipTitle(card.items)}>
+                          <ExpenseSummaryCardContent>
                               <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
                               <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
                               <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
@@ -2424,8 +2445,8 @@ Agendados
                         }
                         return b.total - a.total || b.count - a.count || a.label.localeCompare(b.label);
                       })).map((card) => (
-                        <ExpenseSummaryScrollCard key={`category-${card.id}`}>
-                          <ExpenseSummaryCardContent title={buildTooltipTitle(card.items)}>
+                        <ExpenseSummaryScrollCard key={`category-${card.id}`} title={buildTooltipTitle(card.items)}>
+                          <ExpenseSummaryCardContent>
                           <ExpenseSummaryLabel>{card.label}</ExpenseSummaryLabel>
                           <ExpenseSummaryValue>R$ {formatCurrency(card.total)}</ExpenseSummaryValue>
                           <ExpenseSummaryMeta>{card.count} evento(s)</ExpenseSummaryMeta>
@@ -3861,6 +3882,42 @@ const FinanceInput = styled.input`
   @media (max-width: 768px) {
     font-size: 16px; /* Evita zoom no iOS */
     padding: 0.75rem 0.9rem;
+  }
+`;
+
+const FinanceTagContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 160px;
+
+  @media (max-width: 768px) {
+    min-width: 100%;
+  }
+`;
+
+const FinanceTagLabel = styled.span`
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+`;
+
+const FinanceTagSelect = styled.select`
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 2px solid #374151;
+  border-radius: 8px;
+  background: #111827;
+  color: #e5e7eb;
+  font-size: 0.9rem;
+  outline: none;
+  transition: all 0.2s ease;
+
+  &:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 `;
 
