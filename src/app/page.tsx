@@ -212,6 +212,206 @@ const parseTags = (tagsInput?: Transaction['tags']) => {
   return [];
 };
 
+const DEFAULT_TAG_OPTIONS = [
+  'uber',
+  'uber to aiko',
+  'entrada',
+  'casa',
+  'farmacia',
+  'fatura',
+  'refeicoes',
+  'saude',
+  'presente',
+  'assinatura',
+  'padaria',
+  'mercado',
+  'supermercado',
+  'tabaco',
+  'roupa',
+  'pet',
+  'telefonia',
+  'conta fixa',
+  'emprestimo',
+  'banco',
+  'servico'
+];
+
+const AUTO_TAG_EXACT_ENTRIES: Array<[string, string[]]> = [
+  ['Uber volta Letícia e eu', ['uber']],
+  ['Freela SisZoo Metade do valor (primeira parte)', ['entrada']],
+  ['Torneira e Vela p filtro', ['casa']],
+  ['Farmacia Tratamento ferida pai', ['farmacia']],
+  ['Pagamento Fatura Cartão Crédito', ['fatura']],
+  ['Xerox', ['casa']],
+  ['Comida natal x3', ['refeicoes']],
+  ['Cabelo x3', ['saude']],
+  ['Aniversário', ['presente']],
+  ['Supasbase x4', ['assinatura']],
+  ['Bolo', ['padaria']],
+  ['Uber Internação Pai', ['uber']],
+  ['Tampa vaso x2', ['casa']],
+  ['Açaí', ['refeicoes']],
+  ['Uber Ida Consulta', ['uber']],
+  ['Café e açúcar', ['mercado']],
+  ['Sombra Eny', ['saude']],
+  ['Uber Letícia', ['uber']],
+  ['Uber até Letícia', ['uber']],
+  ['Mortadela', ['mercado']],
+  ['Master x4', ['refeicoes']],
+  ['Pão', ['padaria']],
+  ['Farmácia', ['farmacia']],
+  ['Presentes natal', ['presente']],
+  ['Hostinger', ['assinatura']],
+  ['Uber hospital pai', ['uber']],
+  ['Roupa eny x3', ['roupa']],
+  ['Remédios pai', ['farmacia']],
+  ['Compra BH', ['mercado']],
+  ['Salgado integral', ['padaria']],
+  ['Supermercado', ['supermercado']],
+  ['Carne', ['supermercado']],
+  ['Gaveteiro X3', ['casa']],
+  ['Pizza x4', ['refeicoes']],
+  ['Pastel', ['padaria']],
+  ['Meli+', ['assinatura']],
+  ['Pão de queijo', ['padaria']],
+  ['Garrafinha pai', ['casa']],
+  ['Uber', ['uber']],
+  ['Açai', ['refeicoes']],
+  ['Uber certidão pai', ['uber']],
+  ['Eny maconha', ['tabaco']],
+  ['Remédios pai x4', ['farmacia']],
+  ['Bicicleta x10', ['saude']],
+  ['Freela Parcela 1 de 5 SisZoo', ['entrada']],
+  ['Maionese', ['supermercado']],
+  ['Salgado e água de coco', ['padaria']],
+  ['Ciclete', ['padaria']],
+  ['BHx3', ['mercado']],
+  ['Uber volta Letícia', ['uber']],
+  ['Uber identidade pai', ['uber']],
+  ['Dipirona', ['farmacia']],
+  ['Dúzia ovos', ['mercado']],
+  ['Açougue', ['mercado']],
+  ['Lanche', ['padaria']],
+  ['Cigarro e Refrigerante', ['tabaco']],
+  ['Baralho,  cigarros e chiclete x3', ['tabaco']],
+  ['Cerveja Eny', ['tabaco']],
+  ['Uber Eny Pai', ['uber']],
+  ['Uber Pai', ['uber']],
+  ['Frango', ['mercado']],
+  ['Crédito TIM', ['telefonia']],
+  ['Uber Volta Consulta', ['uber']],
+  ['Cabelo', ['saude']],
+  ['Valorant x3', ['assinatura']],
+  ['Certidão nascimento pai', ['banco']],
+  ['Ansitec 10mg 60comp x3', ['farmacia']],
+  ['Uber volta da Letícia', ['uber']],
+  ['Next', ['banco']],
+  ['Pastéis e coxinha', ['padaria']],
+  ['Salado', ['padaria']],
+  ['Ração', ['pet']],
+  ['Combo Ifood', ['refeicoes']],
+  ['Entrega Eny', ['servico']],
+  ['Psicólogo Iago x3', ['saude']],
+  ['Pasta de dente', ['mercado']],
+  ['Psicologo Eny', ['saude']],
+  ['Almoço', ['refeicoes']],
+  ['Cigarro eny', ['tabaco']],
+  ['Suporte e cadeado x8', ['casa']],
+  ['Freela MR Cursos Mod2', ['entrada']],
+  ['Cigarro', ['tabaco']],
+  ['Freela SisZoo Backup', ['entrada']],
+  ['Uber ida cigano', ['uber']],
+  ['Supermercado x3', ['supermercado']],
+  ['Cigarro Eny', ['tabaco']],
+  ['Sabão em pó', ['mercado']],
+  ['Todas Contas Fixas', ['conta fixa']],
+  ['Válvula Gás', ['casa']],
+  ['Psicólogo Eny', ['saude']],
+  ['Planta', ['casa']],
+  ['Empréstimo Letícia', ['emprestimo']],
+  ['Uber volta vigano', ['uber']],
+  ['Pizza Letícia x3', ['refeicoes']],
+  ['Coxinha costela', ['padaria']],
+  ['Vivo', ['telefonia']],
+  ['Papelaria', ['casa']],
+  ['Unha Eny', ['saude']],
+  ['Supabase', ['assinatura']],
+  ['Uber to Aiko', ['uber', 'uber to aiko']],
+  ['Amazon prime', ['assinatura']],
+  ['Cursor x4', ['assinatura']],
+  ['Anuncio WA Buis', ['assinatura']],
+  ['Google fotos', ['assinatura']],
+  ['Carregador Not', ['casa']],
+  ['Pão dormido', ['padaria']],
+  ['Colchão Pai x6', ['casa']],
+  ['Freela Plataforma MR Cursos', ['entrada']],
+  ['Revellion Viganó', ['presente']],
+  ['NuBank', ['banco']],
+  ['Agua de coco', ['padaria']],
+  ['Coxinha e coca', ['padaria']],
+  ['2 Marmitex', ['refeicoes']],
+  ['Salgado', ['padaria']],
+  ['BH x3', ['mercado']],
+  ['Dissidio', ['entrada']],
+  ['Refrigerante pai', ['mercado']],
+  ['Uber Leticia Trabalho', ['uber']],
+  ['Padaria', ['padaria']],
+  ['Três cigarros', ['tabaco']],
+  ['Uber to Letícia', ['uber']],
+  ['Decimo Terceiro', ['entrada']],
+  ['Refrigerante', ['mercado']],
+  ['Mata Mosquito', ['casa']],
+  ['Roupa pai x2', ['roupa']]
+];
+
+const AUTO_TAG_EXACT_MAP = new Map<string, string[]>(
+  AUTO_TAG_EXACT_ENTRIES.map(([description, tags]) => [normalizeText(description), tags])
+);
+
+const AUTO_TAG_RULES: Array<{ tags: string[]; keywords: string[] }> = [
+  { tags: ['uber', 'uber to aiko'], keywords: ['uber to aiko', 'uber aiko'] },
+  { tags: ['uber'], keywords: ['uber'] },
+  { tags: ['fatura'], keywords: ['fatura', 'cartao credito'] },
+  { tags: ['emprestimo'], keywords: ['emprestimo'] },
+  { tags: ['entrada'], keywords: ['freela', 'dissidio', 'decimo', 'decimo terceiro'] },
+  { tags: ['telefonia'], keywords: ['vivo', 'tim'] },
+  { tags: ['conta fixa'], keywords: ['conta fixa', 'contas fixas'] },
+  { tags: ['assinatura'], keywords: ['supabase', 'hostinger', 'amazon prime', 'google fotos', 'meli', 'cursor', 'valorant'] },
+  { tags: ['servico'], keywords: ['entrega', 'servico'] },
+  { tags: ['presente'], keywords: ['presente', 'aniversario', 'revellion'] },
+  { tags: ['tabaco'], keywords: ['cigarro', 'cigarros', 'maconha', 'cerveja'] },
+  { tags: ['pet'], keywords: ['racao'] },
+  { tags: ['roupa'], keywords: ['roupa'] },
+  { tags: ['saude'], keywords: ['psicolog', 'cabelo', 'unha', 'sombra'] },
+  { tags: ['farmacia'], keywords: ['farmacia', 'remedio', 'medicamento', 'dipirona', 'ansitec'] },
+  { tags: ['padaria'], keywords: ['padaria', 'pao', 'coxinha', 'salgado', 'pastel', 'lanche', 'bolo', 'agua de coco', 'ciclete'] },
+  { tags: ['refeicoes'], keywords: ['pizza', 'marmitex', 'ifood', 'acai', 'almoco', 'comida natal', 'master'] },
+  { tags: ['supermercado'], keywords: ['supermercado', 'maionese', 'carne'] },
+  { tags: ['mercado'], keywords: ['mercado', 'compra', 'bh', 'acougue', 'frango', 'mortadela', 'ovos', 'refrigerante', 'sabao', 'pasta de dente', 'cafe'] },
+  { tags: ['casa'], keywords: ['torneira', 'valvula', 'suporte', 'cadeado', 'gaveteiro', 'carregador', 'colchao', 'papelaria', 'planta', 'mata mosquito', 'garrafinha', 'tampa vaso', 'xerox'] },
+  { tags: ['banco'], keywords: ['nubank', 'next', 'banco', 'certidao'] }
+];
+
+const inferTagsFromDescription = (description: string, knownTagMap: Map<string, string[]>) => {
+  const normalized = normalizeText(stripMultiplierSuffix(description));
+  if (!normalized) {
+    return [];
+  }
+
+  const known = knownTagMap.get(normalized);
+  if (known && known.length > 0) {
+    return known;
+  }
+
+  const exact = AUTO_TAG_EXACT_MAP.get(normalized);
+  if (exact && exact.length > 0) {
+    return exact;
+  }
+
+  const rule = AUTO_TAG_RULES.find(({ keywords }) => keywords.some((keyword) => normalized.includes(keyword)));
+  return rule?.tags ?? [];
+};
+
 const MAX_CARD_ITEMS = 3;
 const MAX_TOOLTIP_ITEMS = 10;
 
@@ -408,6 +608,7 @@ Agendados
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [newTransaction, setNewTransaction] = useState("");
   const [newTransactionTag, setNewTransactionTag] = useState("");
+  const [newTransactionTags, setNewTransactionTags] = useState<string[]>([]);
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
@@ -416,6 +617,8 @@ Agendados
   const itemsPerPage = 5;
   const [expenseReportSort, setExpenseReportSort] = useState<'count' | 'total'>('count');
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const [isTagManuallySelected, setIsTagManuallySelected] = useState(false);
+  const lastDescriptionRef = useRef<string>("");
 
   // Ajusta a altura do textarea automaticamente
   useEffect(() => {
@@ -804,6 +1007,27 @@ Agendados
     const pipeIndex = hasPipe ? value.indexOf('|') : -1;
     const resolvedCursor = cursorPosition ?? transactionInputRef.current?.selectionStart ?? null;
 
+    const descriptionPart = value.split('|')[0].trim();
+    const normalizedDescription = normalizeText(descriptionPart);
+    const shouldResetManual =
+      normalizedDescription !== lastDescriptionRef.current ||
+      (normalizedDescription === '' && lastDescriptionRef.current !== '');
+    if (shouldResetManual) {
+      lastDescriptionRef.current = normalizedDescription;
+      setIsTagManuallySelected(false);
+    }
+
+    if (!isTagManuallySelected && descriptionPart) {
+      const inferredTags = inferTagsFromDescription(descriptionPart, knownTagMap);
+      if (inferredTags.length > 0) {
+        setNewTransactionTags(inferredTags);
+        setNewTransactionTag(inferredTags[0]);
+      } else {
+        setNewTransactionTags([]);
+        setNewTransactionTag("");
+      }
+    }
+
     // Se o cursor estiver após o "|", não exibe recomendações
     if (hasPipe && resolvedCursor !== null && resolvedCursor > pipeIndex) {
       setShowAutocomplete(false);
@@ -851,6 +1075,12 @@ Agendados
     setShowAutocomplete(false);
     setAutocompleteSuggestions([]);
     setSelectedSuggestionIndex(-1);
+    setIsTagManuallySelected(false);
+    const inferredTags = inferTagsFromDescription(suggestion, knownTagMap);
+    if (inferredTags.length > 0) {
+      setNewTransactionTags(inferredTags);
+      setNewTransactionTag(inferredTags[0]);
+    }
 
     // Foca no input e move o cursor para depois do "|"
     setTimeout(() => {
@@ -868,7 +1098,11 @@ Agendados
       return;
     }
 
-    if (!newTransactionTag.trim()) {
+    const tagsToSave = newTransactionTags.length > 0
+      ? newTransactionTags
+      : (newTransactionTag.trim() ? [newTransactionTag.trim()] : []);
+
+    if (tagsToSave.length === 0) {
       toast.error("Selecione uma tag!");
       return;
     }
@@ -947,7 +1181,7 @@ Agendados
           amount: Math.abs(amount),
           type,
           paymentMethod,
-          tags: [newTransactionTag.trim()]
+          tags: tagsToSave
         }),
       });
 
@@ -959,6 +1193,10 @@ Agendados
         };
         setTransactions([normalized as Transaction, ...transactions]);
         setNewTransaction("");
+        setNewTransactionTag("");
+        setNewTransactionTags([]);
+        setIsTagManuallySelected(false);
+        lastDescriptionRef.current = "";
         setShowAutocomplete(false);
         setAutocompleteSuggestions([]);
         setSelectedSuggestionIndex(-1);
@@ -1066,6 +1304,9 @@ Agendados
 
   const tagOptions = useMemo(() => {
     const tagsMap = new Map<string, string>();
+    DEFAULT_TAG_OPTIONS.forEach((tag) => {
+      tagsMap.set(normalizeText(tag), tag);
+    });
     transactions.forEach((transaction) => {
       parseTags(transaction.tags).forEach((tag) => {
         const trimmed = tag.trim();
@@ -1092,6 +1333,21 @@ Agendados
     });
     return map;
   }, [tagOptions]);
+
+  const knownTagMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    transactions.forEach((transaction) => {
+      const normalizedDescription = normalizeText(stripMultiplierSuffix(transaction.description));
+      if (!normalizedDescription) {
+        return;
+      }
+      const tags = parseTags(transaction.tags);
+      if (tags.length > 0) {
+        map.set(normalizedDescription, tags);
+      }
+    });
+    return map;
+  }, [transactions]);
 
   const expenseReportByMonth = useMemo<ExpenseMonthReport[]>(() => {
     const expenses = transactions.filter(t => t.type === 'expense');
@@ -1917,7 +2173,12 @@ Agendados
             <FinanceTagLabel>Tag</FinanceTagLabel>
             <FinanceTagSelect
               value={newTransactionTag}
-              onChange={(event) => setNewTransactionTag(event.target.value)}
+              onChange={(event) => {
+                const selectedTag = event.target.value;
+                setNewTransactionTag(selectedTag);
+                setNewTransactionTags(selectedTag ? [selectedTag] : []);
+                setIsTagManuallySelected(true);
+              }}
             >
               <option value="">Selecione</option>
               {tagOptions.map((tagOption) => (
