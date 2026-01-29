@@ -214,7 +214,6 @@ const parseTags = (tagsInput?: Transaction['tags']) => {
 
 const DEFAULT_TAG_OPTIONS = [
   'uber',
-  'uber to aiko',
   'entrada',
   'casa',
   'farmacia',
@@ -233,7 +232,8 @@ const DEFAULT_TAG_OPTIONS = [
   'conta fixa',
   'emprestimo',
   'banco',
-  'servico'
+  'servico',
+  'desconhecido'
 ];
 
 const AUTO_TAG_EXACT_ENTRIES: Array<[string, string[]]> = [
@@ -336,7 +336,7 @@ const AUTO_TAG_EXACT_ENTRIES: Array<[string, string[]]> = [
   ['Papelaria', ['casa']],
   ['Unha Eny', ['saude']],
   ['Supabase', ['assinatura']],
-  ['Uber to Aiko', ['uber', 'uber to aiko']],
+  ['Uber to Aiko', ['uber']],
   ['Amazon prime', ['assinatura']],
   ['Cursor x4', ['assinatura']],
   ['Anuncio WA Buis', ['assinatura']],
@@ -369,7 +369,7 @@ const AUTO_TAG_EXACT_MAP = new Map<string, string[]>(
 );
 
 const AUTO_TAG_RULES: Array<{ tags: string[]; keywords: string[] }> = [
-  { tags: ['uber', 'uber to aiko'], keywords: ['uber to aiko', 'uber aiko'] },
+  { tags: ['uber'], keywords: ['uber to aiko', 'uber aiko'] },
   { tags: ['uber'], keywords: ['uber'] },
   { tags: ['fatura'], keywords: ['fatura', 'cartao credito'] },
   { tags: ['emprestimo'], keywords: ['emprestimo'] },
@@ -1022,6 +1022,9 @@ Agendados
       if (inferredTags.length > 0) {
         setNewTransactionTags(inferredTags);
         setNewTransactionTag(inferredTags[0]);
+      } else if (descriptionPart.trim()) {
+        setNewTransactionTags(['desconhecido']);
+        setNewTransactionTag('desconhecido');
       } else {
         setNewTransactionTags([]);
         setNewTransactionTag("");
@@ -1080,6 +1083,9 @@ Agendados
     if (inferredTags.length > 0) {
       setNewTransactionTags(inferredTags);
       setNewTransactionTag(inferredTags[0]);
+    } else {
+      setNewTransactionTags(['desconhecido']);
+      setNewTransactionTag('desconhecido');
     }
 
     // Foca no input e move o cursor para depois do "|"
@@ -1317,7 +1323,7 @@ Agendados
         if (!normalized) {
           return;
         }
-        if (!tagsMap.has(normalized)) {
+        if (normalized !== 'uber to aiko' && !tagsMap.has(normalized)) {
           tagsMap.set(normalized, trimmed);
         }
       });
@@ -2170,7 +2176,6 @@ Agendados
             )}
           </FinanceInputContainer>
           <FinanceTagContainer>
-            <FinanceTagLabel>Tag</FinanceTagLabel>
             <FinanceTagSelect
               value={newTransactionTag}
               onChange={(event) => {
@@ -2764,7 +2769,6 @@ Agendados
                                   <span>{(item.paymentMethod ?? 'credit') === 'debit' ? 'Débito' : 'Crédito'}</span>
                                 </ExpenseItemMeta>
                                 <ExpenseItemTagRow>
-                                  <ExpenseItemTagLabel>Tag</ExpenseItemTagLabel>
                                   {item.id && editingTagId === item.id ? (
                                     <ExpenseTagSelect
                                       value={resolvedTag}
@@ -4157,14 +4161,6 @@ const FinanceTagContainer = styled.div`
   }
 `;
 
-const FinanceTagLabel = styled.span`
-  font-size: 0.72rem;
-  color: #94a3b8;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-`;
-
 const FinanceTagSelect = styled.select`
   width: 100%;
   padding: 0.6rem 0.75rem;
@@ -4907,14 +4903,6 @@ const ExpenseItemTagRow = styled.div`
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-`;
-
-const ExpenseItemTagLabel = styled.span`
-  font-size: 0.62rem;
-  color: #64748b;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 `;
 
 const ExpenseTagButton = styled.button`
