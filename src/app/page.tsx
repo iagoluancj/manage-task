@@ -208,7 +208,7 @@ const parseTags = (tagsInput?: Transaction['tags']) => {
         if (Array.isArray(parsed)) {
           return parsed.map((tag) => String(tag).trim()).filter(Boolean);
         }
-      } catch (error) {
+      } catch {
         // fallback para split
       }
     }
@@ -1417,7 +1417,7 @@ Agendados
     setNubankError(null);
 
     try {
-      const pdfjs = await import('pdfjs-dist/legacy/build/pdf');
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
       const workerVersion = pdfjs.version || '4.0.379';
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${workerVersion}/pdf.worker.min.js`;
 
