@@ -738,27 +738,8 @@ export default function Home() {
   );
 
   // Estados para notas rápidas
-  const [quickNotes, setQuickNotes] = useState(`DE CASA
-- Agendar psiquiatra
-- scrapper acs
-- Angelita: 30796205
-
-A COMPRAR:
-- Bolsa térmica comida
-- Minoxidil 
-- Blusa academia
-- gelatina 
-- Meias
-
-FAZER:
-- foto família
-- orar todo dia
-- olhar casas
-- continuar com backup
------ fazer backup dos demais arquivos
-
-Agendados
-- 14/10 - 16:00 Fernand`);
+  const [quickNotes, setQuickNotes] = useState("");
+  const [quickNotesLoaded, setQuickNotesLoaded] = useState(false);
   const [editingQuickNotes, setEditingQuickNotes] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -815,6 +796,10 @@ Agendados
   const handleQuickNotesBlur = async () => {
     setEditingQuickNotes(false);
 
+    if (!quickNotesLoaded) {
+      return;
+    }
+
     try {
       const res = await fetch('/api/quick-notes', {
         method: 'PUT',
@@ -841,9 +826,15 @@ Agendados
         const res = await fetch('/api/quick-notes');
         const data = await res.json();
 
-        if (data.notes && data.notes !== quickNotes) {
-          // Só atualiza se o conteúdo for diferente para evitar loops
-          setQuickNotes(data.notes);
+        if (typeof data.notes === 'string') {
+          if (!quickNotesLoaded || data.notes !== quickNotes) {
+            // Só atualiza se o conteúdo for diferente para evitar loops
+            setQuickNotes(data.notes);
+          }
+          setQuickNotesLoaded(true);
+        } else if (!quickNotesLoaded) {
+          setQuickNotes("");
+          setQuickNotesLoaded(true);
         }
       } catch (error) {
         console.error('Erro ao buscar notas:', error);
@@ -857,7 +848,7 @@ Agendados
     const interval = setInterval(fetchQuickNotes, 5000);
 
     return () => clearInterval(interval);
-  }, [isAuthenticated, editingQuickNotes, quickNotes]);
+  }, [isAuthenticated, editingQuickNotes, quickNotes, quickNotesLoaded]);
 
   // Ordena rotina por horário
   const sortRoutineByTime = useCallback((routine: typeof workRoutine) => {
@@ -1135,9 +1126,12 @@ Agendados
         const notesRes = await fetch('/api/quick-notes');
         const notesData = await notesRes.json();
 
-        if (notesData.notes) {
+        if (typeof notesData.notes === 'string') {
           setQuickNotes(notesData.notes);
+        } else {
+          setQuickNotes("");
         }
+        setQuickNotesLoaded(true);
 
         // Carregar transações
         const transactionsRes = await fetch('/api/transactions');
@@ -2286,10 +2280,22 @@ Agendados
               spellCheck={false}
             />
           ) : (
-            <QuickNotesDisplay onClick={() => setEditingQuickNotes(true)}>
-              {quickNotes.split('\n').map((line, index) => (
-                <div key={index}>{line || ' '}</div>
-              ))}
+            <QuickNotesDisplay
+              onClick={() => {
+                if (!quickNotesLoaded) {
+                  toast.error('Carregando notas, aguarde...');
+                  return;
+                }
+                setEditingQuickNotes(true);
+              }}
+            >
+              {!quickNotesLoaded ? (
+                <div>Carregando notas...</div>
+              ) : (
+                quickNotes.split('\n').map((line, index) => (
+                  <div key={index}>{line || ' '}</div>
+                ))
+              )}
             </QuickNotesDisplay>
           )}
         </QuickNotesContent>
