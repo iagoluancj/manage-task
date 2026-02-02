@@ -517,6 +517,7 @@ const normalizeMerchantBase = (raw: string) => {
     .replace(/\b\d+\s+de\s+\d+\b\s+iago.*$/i, '')
     .replace(/\b\d+\s+de\s+\d+\b\s+fatura.*$/i, '')
     .replace(/transacoes de.*$/i, '')
+    .replace(/\b\d+\s+de\s+\d+\b.*$/i, '')
     .replace(/parcelamento de compra/i, '')
     .replace(/credito de parcelamento de compra/i, '')
     .replace(/iof de/i, '')
@@ -655,27 +656,26 @@ const extractNubankSectionLines = (text: string) => {
     const line = lines[i];
     const normalizedLine = normalizeText(line);
 
-    if (!foundSection) {
-      if (normalizedLine.includes(NUBANK_SECTION_START_TOKEN)) {
+    if (normalizedLine.includes(NUBANK_SECTION_START_TOKEN)) {
+      inSection = true;
+      foundSection = true;
+      awaitingDeLine = false;
+      continue;
+    }
+
+    if (normalizedLine === 'transacoes') {
+      awaitingDeLine = true;
+      continue;
+    }
+
+    if (awaitingDeLine) {
+      if (normalizedLine.startsWith('de')) {
         inSection = true;
         foundSection = true;
-        continue;
-      }
-
-      if (normalizedLine === 'transacoes') {
-        awaitingDeLine = true;
-        continue;
-      }
-
-      if (awaitingDeLine) {
-        if (normalizedLine.startsWith('de')) {
-          inSection = true;
-          foundSection = true;
-          awaitingDeLine = false;
-          continue;
-        }
         awaitingDeLine = false;
+        continue;
       }
+      awaitingDeLine = false;
     }
 
     if (inSection && NUBANK_SECTION_END_TOKENS.some((token) => normalizedLine.startsWith(token))) {
