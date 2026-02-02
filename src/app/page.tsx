@@ -52,9 +52,17 @@ interface NubankParsedTransaction {
   id: string;
   date: string;
   description: string;
+  normalizedName: string;
   amount: number;
   amountLabel: string;
   tag: string;
+  tags: string[];
+  direction: 'entrada' | 'saida';
+  isInstallment: boolean;
+  installmentNumber?: number;
+  installmentTotal?: number;
+  installmentGroupId?: string;
+  rawLine: string;
   sourceFile: string;
 }
 
@@ -484,6 +492,104 @@ const parseBrazilianCurrency = (value: string) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+const toTitleCase = (value: string) => {
+  return value
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => {
+      if (word.length <= 2) {
+        return word.toUpperCase();
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+};
+
+const normalizeMerchantBase = (raw: string) => {
+  let merchant = raw;
+  const quoted = merchant.match(/"([^"]+)"/);
+  if (quoted) {
+    merchant = quoted[1];
+  }
+
+  merchant = merchant
+    .replace(/parcelamento de compra/i, '')
+    .replace(/credito de parcelamento de compra/i, '')
+    .replace(/iof de/i, '')
+    .replace(/saldo restante da fatura anterior/i, '')
+    .replace(/pagamento em/i, '')
+    .replace(/-?\s*parcela\s*\d+\/\d+/i, '')
+    .replace(/\s*parcela\s*\d+\/\d+/i, '')
+    .replace(/•{2,}\s*\d{4}\s*/g, '')
+    .replace(/-?\s*nu ?pay/gi, '')
+    .replace(/-?\s*nupay/gi, '')
+    .replace(/\*/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return merchant;
+};
+
+const extractInstallmentInfo = (raw: string, normalizedName: string, amountValue: number) => {
+  const match = raw.match(/parcela\s*(\d+)\s*\/\s*(\d+)/i);
+  if (!match) {
+    return { isInstallment: false };
+  }
+
+  const number = Number(match[1]);
+  const total = Number(match[2]);
+  const groupId = `${normalizeText(normalizedName)}-${total}-${amountValue.toFixed(2)}`;
+
+  return {
+    isInstallment: true,
+    installmentNumber: number,
+    installmentTotal: total,
+    installmentGroupId: groupId
+  };
+};
+
+const NUBANK_TAG_RULES: Array<{ match: RegExp; name: string; tags: string[] }> = [
+  { match: /\buber\b/i, name: 'Uber', tags: ['Uber', 'Transporte'] },
+  { match: /\b99\b|\b99 - nupay\b|\b99 - nu ?pay\b/i, name: '99', tags: ['99', 'Transporte'] },
+  { match: /\bifd\b|\bifood\b/i, name: 'iFood', tags: ['iFood', 'Alimentação', 'Delivery'] },
+  { match: /\bpadaria\b|\bpastelaria\b|\blanche|\bpao\b|\bpadaria\b/i, name: 'Padaria', tags: ['Padaria', 'Alimentação'] },
+  { match: /\bsupermercad|\bsacolao|\bmercado\b/i, name: 'Supermercado', tags: ['Mercado', 'Supermercado'] },
+  { match: /\bdrogaria|\bfarmacia|\bdrogarias/i, name: 'Farmácia', tags: ['Farmácia', 'Saúde'] },
+  { match: /\bamazon\b|\bmercadolivre\b|\bshein\b|\bvindi\b|\binsider\b/i, name: 'E-commerce', tags: ['Compras', 'Online'] },
+  { match: /\bgoogle\b|\bsupabase\b|\bcursor\b|\bhostinger\b|\bmeli\b/i, name: 'Assinaturas', tags: ['Assinatura', 'Serviços'] },
+  { match: /\bpizza\b|\bgrill\b|\brestaurante\b|\bpizzaria\b|\bdelivery\b|\bze delivery\b/i, name: 'Restaurante', tags: ['Alimentação'] },
+  { match: /\bloteria|\bloteriasonline/i, name: 'Loteria', tags: ['Loteria', 'Jogos'] }
+];
+
+const classifyNubankTransaction = (raw: string, amountValue: number) => {
+  const normalizedRaw = normalizeText(raw);
+
+  if (normalizedRaw.includes('credito de parcelamento de compra')) {
+    return { name: 'Crédito de parcelamento', tags: ['Crédito', 'Parcelamento', 'Estorno'] };
+  }
+  if (normalizedRaw.includes('pagamento em')) {
+    return { name: 'Pagamento de fatura', tags: ['Pagamento', 'Crédito'] };
+  }
+  if (normalizedRaw.includes('saldo restante da fatura anterior')) {
+    return { name: 'Saldo restante fatura anterior', tags: ['Ajuste'] };
+  }
+  if (normalizedRaw.includes('iof de')) {
+    const merchant = normalizeMerchantBase(raw);
+    const name = merchant ? `IOF - ${toTitleCase(merchant)}` : 'IOF';
+    return { name, tags: ['IOF', 'Imposto'] };
+  }
+
+  const merchant = normalizeMerchantBase(raw);
+  const merchantNormalized = normalizeText(merchant);
+  const rule = NUBANK_TAG_RULES.find((candidate) => candidate.match.test(merchantNormalized));
+  if (rule) {
+    return { name: rule.name, tags: rule.tags };
+  }
+
+  const fallbackName = merchant ? toTitleCase(merchant) : 'Transação';
+  return { name: fallbackName, tags: ['desconhecido'] };
+};
+
 const getNubankLines = (text: string) => {
   return text
     .split(/\r?\n/g)
@@ -548,7 +654,8 @@ const cleanNubankDescription = (line: string) => {
 const parseNubankTransactionsFromText = (
   text: string,
   sourceFile: string,
-  knownTagMap: Map<string, string[]>
+  knownTagMap: Map<string, string[]>,
+  logLines: string[]
 ) => {
   const { sectionLines, foundSection, lines: allLines } = extractNubankSectionLines(text);
   const lines = sectionLines.length > 0 ? sectionLines : allLines;
@@ -589,16 +696,50 @@ const parseNubankTransactionsFromText = (
         description = fallbackLine ? cleanNubankDescription(fallbackLine) : 'Transação';
       }
 
-      const suggestedTags = inferTagsFromDescription(description, knownTagMap);
-      const tag = suggestedTags[0] ?? 'desconhecido';
+      const { name: normalizedName, tags: inferredTags } = classifyNubankTransaction(description, amount);
+      const installmentInfo = extractInstallmentInfo(description, normalizedName, amountValue);
+      const tagsFromHistory = inferTagsFromDescription(normalizedName, knownTagMap);
+      const tags = Array.from(new Set([...inferredTags, ...tagsFromHistory]));
+      const tag = tags[0] ?? 'desconhecido';
+      const direction: 'entrada' | 'saida' = amount < 0 ? 'entrada' : 'saida';
+
+      logLines.push(
+        JSON.stringify(
+          {
+            sourceFile,
+            rawLine: combined,
+            date: entry.date,
+            amountRaw,
+            amount,
+            direction,
+            description,
+            normalizedName,
+            tags,
+            isInstallment: installmentInfo.isInstallment,
+            installmentNumber: installmentInfo.installmentNumber,
+            installmentTotal: installmentInfo.installmentTotal,
+            installmentGroupId: installmentInfo.installmentGroupId
+          },
+          null,
+          2
+        )
+      );
 
       return {
         id: `${sourceFile}-${index}-${entry.date}`,
         date: entry.date,
         description,
+        normalizedName,
         amount,
         amountLabel: amountRaw.replace(/\s+/g, ' ').trim(),
         tag,
+        tags,
+        direction,
+        isInstallment: installmentInfo.isInstallment ?? false,
+        installmentNumber: installmentInfo.installmentNumber,
+        installmentTotal: installmentInfo.installmentTotal,
+        installmentGroupId: installmentInfo.installmentGroupId,
+        rawLine: combined,
         sourceFile
       } as NubankParsedTransaction;
     })
@@ -762,6 +903,7 @@ export default function Home() {
   const [nubankTransactions, setNubankTransactions] = useState<NubankParsedTransaction[]>([]);
   const [nubankIsParsing, setNubankIsParsing] = useState(false);
   const [nubankError, setNubankError] = useState<string | null>(null);
+  const [nubankLogs, setNubankLogs] = useState<string>("");
 
   // Ajusta a altura do textarea automaticamente
   useEffect(() => {
@@ -1444,6 +1586,7 @@ export default function Home() {
 
     setNubankFiles(fileArray);
     setNubankError(null);
+    setNubankLogs("");
   };
 
   const handleParseNubankInvoices = async () => {
@@ -1463,6 +1606,7 @@ export default function Home() {
       ).toString();
 
       const parsedTransactions: NubankParsedTransaction[] = [];
+      const logLines: string[] = [];
 
       for (const file of nubankFiles) {
         const arrayBuffer = await file.arrayBuffer();
@@ -1479,7 +1623,7 @@ export default function Home() {
           textContent += `${pageText}\n`;
         }
 
-        const parsed = parseNubankTransactionsFromText(textContent, file.name, knownTagMap);
+        const parsed = parseNubankTransactionsFromText(textContent, file.name, knownTagMap, logLines);
         parsedTransactions.push(...parsed);
       }
 
@@ -1488,6 +1632,7 @@ export default function Home() {
       }
 
       setNubankTransactions(parsedTransactions);
+      setNubankLogs(logLines.join('\n\n---\n\n'));
     } catch (error) {
       console.error('Erro ao ler fatura Nubank:', error);
       setNubankError('Não foi possível ler o PDF. Verifique o arquivo e tente novamente.');
@@ -1500,6 +1645,7 @@ export default function Home() {
     setNubankFiles([]);
     setNubankTransactions([]);
     setNubankError(null);
+    setNubankLogs("");
   };
 
   // Função para extrair multiplicador da descrição (ex: "BHx3" -> 3, "Valorant x3" -> 3)
@@ -3143,9 +3289,20 @@ export default function Home() {
                     <NubankTag>#{formatTagLabel(transaction.tag)}</NubankTag>
                   </NubankTransactionHeader>
                   <NubankTransactionBody>
-                    <strong>{transaction.description}</strong>
+                    <strong>{transaction.normalizedName}</strong>
+                    <span>{transaction.description}</span>
                     <span>{transaction.sourceFile}</span>
                   </NubankTransactionBody>
+                  <NubankTags>
+                    {transaction.tags.map((tag) => (
+                      <NubankTag key={`${transaction.id}-${tag}`}>#{formatTagLabel(tag)}</NubankTag>
+                    ))}
+                  </NubankTags>
+                  {transaction.isInstallment && (
+                    <NubankInstallment>
+                      Parcela {transaction.installmentNumber}/{transaction.installmentTotal}
+                    </NubankInstallment>
+                  )}
                   <NubankAmount $isNegative={transaction.amount < 0}>
                     {transaction.amountLabel}
                   </NubankAmount>
@@ -3153,6 +3310,27 @@ export default function Home() {
               ))
             )}
           </NubankTransactions>
+          <NubankLogsCard>
+            <NubankLogsHeader>
+              <div>
+                <NubankLogsTitle>Logs de interpretação</NubankLogsTitle>
+                <NubankLogsHint>Copie e envie estes logs para validação.</NubankLogsHint>
+              </div>
+              <NubankSecondaryButton
+                type="button"
+                onClick={() => {
+                  if (nubankLogs) {
+                    navigator.clipboard.writeText(nubankLogs);
+                    toast.success('Logs copiados!');
+                  }
+                }}
+                disabled={!nubankLogs}
+              >
+                Copiar logs
+              </NubankSecondaryButton>
+            </NubankLogsHeader>
+            <NubankLogsTextarea value={nubankLogs || 'Nenhum log disponível.'} readOnly />
+          </NubankLogsCard>
         </NubankSection>
       )}
 
@@ -5482,6 +5660,18 @@ const NubankTransactionBody = styled.div`
   }
 `;
 
+const NubankTags = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+`;
+
+const NubankInstallment = styled.div`
+  font-size: 0.75rem;
+  color: #fbbf24;
+  font-weight: 600;
+`;
+
 const NubankAmount = styled.span<{ $isNegative: boolean }>`
   font-size: 0.9rem;
   font-weight: 700;
@@ -5495,6 +5685,47 @@ const NubankEmpty = styled.div`
   border: 1px dashed rgba(148, 163, 184, 0.3);
   color: #94a3b8;
   font-size: 0.85rem;
+`;
+
+const NubankLogsCard = styled.div`
+  background: rgba(2, 6, 23, 0.7);
+  border-radius: 14px;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const NubankLogsHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+`;
+
+const NubankLogsTitle = styled.h3`
+  font-size: 1rem;
+  color: #e2e8f0;
+  margin: 0;
+`;
+
+const NubankLogsHint = styled.span`
+  font-size: 0.75rem;
+  color: #94a3b8;
+`;
+
+const NubankLogsTextarea = styled.textarea`
+  width: 100%;
+  min-height: 220px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  padding: 0.75rem;
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  resize: vertical;
+  line-height: 1.4;
 `;
 
 const ExpenseItemAmount = styled.div`
