@@ -463,13 +463,23 @@ const buildTooltipTitle = (items: string[]) => {
   return items.join('\n');
 };
 
-const NUBANK_SECTION_START = /^TRANSAÇÕES DE/i;
-const NUBANK_SECTION_END = /^(PAGAMENTOS E FINANCIAMENTOS|RESUMO DA FATURA|PRÓXIMAS FATURAS|LIMITES DISPONÍVEIS|VALOR MÁXIMO PARA TRANSAÇÕES|FATURA)/i;
-const NUBANK_DATE_REGEX = /^(\d{2})\s+([A-Z]{3})\b/;
-const NUBANK_AMOUNT_REGEX = /-?\s*R\$\s*[\d.]+,\d{2}/g;
+const NUBANK_DATE_REGEX = /^(\d{2})\s+([A-Z]{3})\b/i;
+const NUBANK_AMOUNT_REGEX = /[-−–]?\s*R\$\s*[\d.]+,\d{2}/g;
+const NUBANK_SECTION_START_TOKEN = 'transacoes de';
+const NUBANK_SECTION_END_TOKENS = [
+  'pagamentos e financiamentos',
+  'resumo da fatura',
+  'proximas faturas',
+  'limites disponiveis',
+  'valor maximo para transacoes',
+  'sac',
+  'ouvidoria',
+  'encargos e custo'
+];
 
 const parseBrazilianCurrency = (value: string) => {
-  const cleaned = value.replace(/[^\d,-]/g, '').replace(/\./g, '').replace(',', '.');
+  const normalized = value.replace(/\u2212/g, '-');
+  const cleaned = normalized.replace(/[^\d,-]/g, '').replace(/\./g, '').replace(',', '.');
   const parsed = Number(cleaned);
   return Number.isNaN(parsed) ? 0 : parsed;
 };
@@ -484,11 +494,12 @@ const extractNubankSectionLines = (text: string) => {
   const sectionLines: string[] = [];
 
   lines.forEach((line) => {
-    if (NUBANK_SECTION_START.test(line)) {
+    const normalizedLine = normalizeText(line);
+    if (normalizedLine.startsWith(NUBANK_SECTION_START_TOKEN)) {
       inSection = true;
       return;
     }
-    if (inSection && NUBANK_SECTION_END.test(line)) {
+    if (inSection && NUBANK_SECTION_END_TOKENS.some((token) => normalizedLine.startsWith(token))) {
       inSection = false;
       return;
     }
@@ -503,7 +514,7 @@ const extractNubankSectionLines = (text: string) => {
 const cleanNubankDescription = (line: string) => {
   let description = line.replace(NUBANK_DATE_REGEX, '').trim();
   description = description.replace(/•{2,}\s*\d{4}\s*/g, '').trim();
-  description = description.replace(/-?\s*R\$\s*[\d.]+,\d{2}/g, '').trim();
+  description = description.replace(/[-−–]?\s*R\$\s*[\d.]+,\d{2}/g, '').trim();
   return description;
 };
 
@@ -542,7 +553,7 @@ const parseNubankTransactionsFromText = (
       }
 
       const amountValue = parseBrazilianCurrency(amountRaw);
-      const amount = amountRaw.includes('-') ? -amountValue : amountValue;
+      const amount = /[-−–]/.test(amountRaw) ? -amountValue : amountValue;
       let description = cleanNubankDescription(entry.lines[0]);
 
       if (!description) {
@@ -1442,6 +1453,10 @@ Agendados
 
         const parsed = parseNubankTransactionsFromText(textContent, file.name, knownTagMap);
         parsedTransactions.push(...parsed);
+      }
+
+      if (parsedTransactions.length === 0) {
+        setNubankError('Nenhuma transação encontrada nas faturas. Verifique se o PDF contém a aba de transações.');
       }
 
       setNubankTransactions(parsedTransactions);
