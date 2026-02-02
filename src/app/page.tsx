@@ -579,6 +579,9 @@ const NUBANK_TAG_RULES: Array<{ match: RegExp; name?: string; tags: string[]; us
 const classifyNubankTransaction = (raw: string) => {
   const normalizedRaw = normalizeText(raw);
 
+  if (normalizedRaw.includes('estorno de pagamento') || normalizedRaw.startsWith('estorno')) {
+    return { name: 'Estorno de pagamento', tags: ['Crédito', 'Estorno'] };
+  }
   if (normalizedRaw.includes('credito de parcelamento de compra')) {
     return { name: 'Crédito de parcelamento', tags: ['Crédito', 'Parcelamento', 'Estorno'] };
   }
@@ -1909,22 +1912,43 @@ export default function Home() {
 
   const nubankSummary = useMemo(() => {
     if (nubankTransactions.length === 0) {
-      return { total: 0, count: 0, positive: 0, negative: 0 };
+      return { totalFatura: 0, count: 0, compras: 0, creditos: 0, pagamentos: 0 };
     }
 
-    return nubankTransactions.reduce(
+    const summary = nubankTransactions.reduce(
       (acc, transaction) => {
-        acc.total += transaction.amount;
+        const amount = transaction.amount;
+        const amountAbs = Math.abs(amount);
+        const normalizedName = normalizeText(transaction.normalizedName || transaction.description || '');
+        const normalizedDescription = normalizeText(transaction.description || '');
+        const normalizedTags = new Set(transaction.tags.map((tag) => normalizeText(tag)));
+        const isPagamento =
+          normalizedTags.has('pagamento') ||
+          normalizedName.includes('pagamento de fatura') ||
+          normalizedDescription.includes('pagamento em');
+        const isAjuste = normalizedName.includes('saldo restante fatura anterior');
+        const isCreditoOuEstorno =
+          normalizedTags.has('credito') ||
+          normalizedTags.has('estorno') ||
+          normalizedName.includes('credito de parcelamento');
+
         acc.count += 1;
-        if (transaction.amount >= 0) {
-          acc.positive += transaction.amount;
+        if (isAjuste) {
+          return acc;
+        }
+        if (isPagamento) {
+          acc.pagamentos += amountAbs;
+        } else if (amount < 0 || isCreditoOuEstorno) {
+          acc.creditos += amountAbs;
         } else {
-          acc.negative += transaction.amount;
+          acc.compras += amount;
         }
         return acc;
       },
-      { total: 0, count: 0, positive: 0, negative: 0 }
+      { count: 0, compras: 0, creditos: 0, pagamentos: 0 }
     );
+
+    return { ...summary, totalFatura: summary.compras - summary.creditos };
   }, [nubankTransactions]);
 
   const expenseReportByMonth = useMemo<ExpenseMonthReport[]>(() => {
@@ -3444,16 +3468,20 @@ export default function Home() {
               <strong>{nubankSummary.count}</strong>
             </NubankSummaryCard>
             <NubankSummaryCard>
-              <span>Total geral</span>
-              <strong>R$ {formatCurrency(nubankSummary.total)}</strong>
+              <span>Total da fatura (sem pagamentos)</span>
+              <strong>R$ {formatCurrency(nubankSummary.totalFatura)}</strong>
             </NubankSummaryCard>
             <NubankSummaryCard>
               <span>Compras</span>
-              <strong>R$ {formatCurrency(nubankSummary.positive)}</strong>
+              <strong>R$ {formatCurrency(nubankSummary.compras)}</strong>
             </NubankSummaryCard>
             <NubankSummaryCard>
               <span>Estornos/Créditos</span>
-              <strong>R$ {formatCurrency(Math.abs(nubankSummary.negative))}</strong>
+              <strong>R$ {formatCurrency(nubankSummary.creditos)}</strong>
+            </NubankSummaryCard>
+            <NubankSummaryCard>
+              <span>Pagamentos</span>
+              <strong>R$ {formatCurrency(nubankSummary.pagamentos)}</strong>
             </NubankSummaryCard>
           </NubankSummaryGrid>
 
