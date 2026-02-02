@@ -576,7 +576,7 @@ const NUBANK_TAG_RULES: Array<{ match: RegExp; name?: string; tags: string[]; us
   { match: /\bloteria|\bloteriasonline/i, tags: ['Loteria', 'Jogos'], useMerchantName: true }
 ];
 
-const classifyNubankTransaction = (raw: string, amountValue: number) => {
+const classifyNubankTransaction = (raw: string) => {
   const normalizedRaw = normalizeText(raw);
 
   if (normalizedRaw.includes('credito de parcelamento de compra')) {
@@ -740,7 +740,7 @@ const splitNubankEntry = (entryLine: string) => {
     return [];
   }
   const date = `${dateMatch[1]} ${dateMatch[2]}`;
-  let rest = entryLine.replace(NUBANK_DATE_REGEX, '').trim();
+  const rest = entryLine.replace(NUBANK_DATE_REGEX, '').trim();
   if (!rest) {
     return [];
   }
@@ -836,7 +836,7 @@ const parseNubankTransactionsFromText = (
         description = 'Transação';
       }
 
-      const { name: normalizedName, tags: inferredTags } = classifyNubankTransaction(description, amount);
+      const { name: normalizedName, tags: inferredTags } = classifyNubankTransaction(description);
       const installmentInfo = extractInstallmentInfo(segmentRaw, normalizedName, amountValue);
       const tagsFromHistory = inferTagsFromDescription(normalizedName, knownTagMap);
       let tags = Array.from(
