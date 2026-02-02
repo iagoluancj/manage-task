@@ -473,6 +473,7 @@ const buildTooltipTitle = (items: string[]) => {
 
 const NUBANK_DATE_REGEX = /^(\d{2})\s+([A-Z]{3})\b/i;
 const NUBANK_AMOUNT_REGEX = /[-−–]?\s*R\$\s*[\d.]+,\d{2}/g;
+const NUBANK_AMOUNT_INLINE_REGEX = /[-−–]?\s*R\$\s*[\d.]+,\d{2}/;
 const NUBANK_SECTION_START_TOKEN = 'transacoes de';
 const NUBANK_SECTION_END_TOKENS = [
   'resumo da fatura',
@@ -712,7 +713,12 @@ const parseNubankTransactionsFromText = (
   logLines: string[]
 ) => {
   const { sectionLines, foundSection, lines: allLines } = extractNubankSectionLines(text);
-  const lines = sectionLines.length > 0 ? sectionLines : allLines;
+  const extraLines = allLines.filter(
+    (line) => NUBANK_DATE_REGEX.test(line) && NUBANK_AMOUNT_INLINE_REGEX.test(line)
+  );
+  const lines = sectionLines.length > 0
+    ? Array.from(new Set([...sectionLines, ...extraLines]))
+    : allLines;
   const entries: Array<{ date: string; lines: string[] }> = [];
   let current: { date: string; lines: string[] } | null = null;
 
@@ -742,7 +748,8 @@ const parseNubankTransactionsFromText = (
       }
 
       const amountValue = parseBrazilianCurrency(amountRaw);
-      const amount = /[-−–]/.test(amountRaw) ? -amountValue : amountValue;
+      const isNegative = amountRaw.includes('-') || amountRaw.includes('−') || amountRaw.includes('–');
+      const amount = isNegative ? -amountValue : amountValue;
       let description = cleanNubankDescription(combined);
 
       if (!description) {
