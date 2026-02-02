@@ -1432,7 +1432,8 @@ Agendados
           const page = await pdf.getPage(pageIndex);
           const content = await page.getTextContent();
           const pageText = content.items
-            .map((item: { str: string }) => item.str)
+            .map((item) => ('str' in item ? item.str : ''))
+            .filter(Boolean)
             .join('\n');
           textContent += `${pageText}\n`;
         }
