@@ -484,31 +484,58 @@ const parseBrazilianCurrency = (value: string) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
-const extractNubankSectionLines = (text: string) => {
-  const lines = text
+const getNubankLines = (text: string) => {
+  return text
     .split(/\r?\n/g)
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
+};
 
+const extractNubankSectionLines = (text: string) => {
+  const lines = getNubankLines(text);
   let inSection = false;
+  let foundSection = false;
+  let awaitingDeLine = false;
   const sectionLines: string[] = [];
 
-  lines.forEach((line) => {
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
     const normalizedLine = normalizeText(line);
-    if (normalizedLine.startsWith(NUBANK_SECTION_START_TOKEN)) {
-      inSection = true;
-      return;
+
+    if (!foundSection) {
+      if (normalizedLine.includes(NUBANK_SECTION_START_TOKEN)) {
+        inSection = true;
+        foundSection = true;
+        continue;
+      }
+
+      if (normalizedLine === 'transacoes') {
+        awaitingDeLine = true;
+        continue;
+      }
+
+      if (awaitingDeLine) {
+        if (normalizedLine.startsWith('de')) {
+          inSection = true;
+          foundSection = true;
+          awaitingDeLine = false;
+          continue;
+        }
+        awaitingDeLine = false;
+      }
     }
+
     if (inSection && NUBANK_SECTION_END_TOKENS.some((token) => normalizedLine.startsWith(token))) {
       inSection = false;
-      return;
+      continue;
     }
+
     if (inSection) {
       sectionLines.push(line);
     }
-  });
+  }
 
-  return sectionLines;
+  return { sectionLines, foundSection, lines };
 };
 
 const cleanNubankDescription = (line: string) => {
@@ -523,7 +550,8 @@ const parseNubankTransactionsFromText = (
   sourceFile: string,
   knownTagMap: Map<string, string[]>
 ) => {
-  const lines = extractNubankSectionLines(text);
+  const { sectionLines, foundSection, lines: allLines } = extractNubankSectionLines(text);
+  const lines = sectionLines.length > 0 ? sectionLines : allLines;
   const entries: Array<{ date: string; lines: string[] }> = [];
   let current: { date: string; lines: string[] } | null = null;
 
@@ -543,7 +571,7 @@ const parseNubankTransactionsFromText = (
     entries.push(current);
   }
 
-  return entries
+  const parsedEntries = entries
     .map((entry, index) => {
       const combined = entry.lines.join(' ');
       const amountMatches = combined.match(NUBANK_AMOUNT_REGEX) ?? [];
@@ -575,6 +603,12 @@ const parseNubankTransactionsFromText = (
       } as NubankParsedTransaction;
     })
     .filter((entry): entry is NubankParsedTransaction => Boolean(entry));
+
+  if (parsedEntries.length === 0 && foundSection) {
+    return [];
+  }
+
+  return parsedEntries;
 };
 
 const formatTagLabel = (tag: string) => {
