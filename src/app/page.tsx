@@ -1418,8 +1418,10 @@ Agendados
 
     try {
       const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-      const workerVersion = pdfjs.version || '4.0.379';
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${workerVersion}/pdf.worker.min.js`;
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
+        import.meta.url
+      ).toString();
 
       const parsedTransactions: NubankParsedTransaction[] = [];
 
