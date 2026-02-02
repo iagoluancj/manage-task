@@ -1696,10 +1696,40 @@ export default function Home() {
         for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
           const page = await pdf.getPage(pageIndex);
           const content = await page.getTextContent();
-          const pageText = content.items
-            .map((item) => ('str' in item ? item.str : ''))
+          const lineBuckets: Array<{ y: number; items: Array<{ x: number; text: string }> }> = [];
+
+          content.items.forEach((item) => {
+            if (!('str' in item)) {
+              return;
+            }
+            const text = item.str?.trim();
+            if (!text) {
+              return;
+            }
+            const transform = item.transform as number[];
+            const x = transform[4] ?? 0;
+            const y = transform[5] ?? 0;
+            const existing = lineBuckets.find((bucket) => Math.abs(bucket.y - y) < 2);
+            if (existing) {
+              existing.items.push({ x, text });
+            } else {
+              lineBuckets.push({ y, items: [{ x, text }] });
+            }
+          });
+
+          const pageText = lineBuckets
+            .sort((a, b) => b.y - a.y)
+            .map((bucket) =>
+              bucket.items
+                .sort((a, b) => a.x - b.x)
+                .map((item) => item.text)
+                .join(' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+            )
             .filter(Boolean)
             .join('\n');
+
           textContent += `${pageText}\n`;
         }
 
