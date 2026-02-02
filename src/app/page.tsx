@@ -475,7 +475,6 @@ const NUBANK_DATE_REGEX = /^(\d{2})\s+([A-Z]{3})\b/i;
 const NUBANK_AMOUNT_REGEX = /[-−–]?\s*R\$\s*[\d.]+,\d{2}/g;
 const NUBANK_SECTION_START_TOKEN = 'transacoes de';
 const NUBANK_SECTION_END_TOKENS = [
-  'pagamentos e financiamentos',
   'resumo da fatura',
   'proximas faturas',
   'limites disponiveis',
@@ -523,6 +522,9 @@ const normalizeMerchantBase = (raw: string) => {
     .replace(/iof de/i, '')
     .replace(/saldo restante da fatura anterior/i, '')
     .replace(/pagamento em/i, '')
+    .replace(/total a pagar:.*$/i, '')
+    .replace(/\(valor da transacao.*$/i, '')
+    .replace(/\(valor da transa[cç]ao.*$/i, '')
     .replace(/-?\s*parcela\s*\d+\/\d+/i, '')
     .replace(/\s*parcela\s*\d+\/\d+/i, '')
     .replace(/•{2,}\s*\d{4}\s*/g, '')
@@ -698,6 +700,8 @@ const cleanNubankDescription = (line: string) => {
   description = description.replace(/•{2,}\s*\d{4}\s*/g, '').trim();
   description = description.replace(/[-−–]?\s*R\$\s*[\d.]+,\d{2}/g, '').trim();
   description = description.replace(/\b\d+\s+de\s+\d+\b.*$/i, '').trim();
+  description = description.replace(/total a pagar:.*$/i, '').trim();
+  description = description.replace(/\(valor da transa[cç]ao.*$/i, '').trim();
   return description;
 };
 
@@ -756,7 +760,7 @@ const parseNubankTransactionsFromText = (
         description = 'Transação';
       }
 
-      const { name: normalizedName, tags: inferredTags } = classifyNubankTransaction(combined, amount);
+      const { name: normalizedName, tags: inferredTags } = classifyNubankTransaction(description || combined, amount);
       const installmentInfo = extractInstallmentInfo(combined, normalizedName, amountValue);
       const tagsFromHistory = inferTagsFromDescription(normalizedName, knownTagMap);
       let tags = Array.from(
