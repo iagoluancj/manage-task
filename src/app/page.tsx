@@ -48,6 +48,16 @@ interface Transaction {
   tags?: string[] | string | null;
 }
 
+interface NubankParsedTransaction {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  amountLabel: string;
+  tag: string;
+  sourceFile: string;
+}
+
 type ExpenseReportItem = Transaction & {
   multiplier: number;
   effectiveAmount: number;
@@ -453,6 +463,109 @@ const buildTooltipTitle = (items: string[]) => {
   return items.join('\n');
 };
 
+const NUBANK_SECTION_START = /^TRANSAÇÕES DE/i;
+const NUBANK_SECTION_END = /^(PAGAMENTOS E FINANCIAMENTOS|RESUMO DA FATURA|PRÓXIMAS FATURAS|LIMITES DISPONÍVEIS|VALOR MÁXIMO PARA TRANSAÇÕES|FATURA)/i;
+const NUBANK_DATE_REGEX = /^(\d{2})\s+([A-Z]{3})\b/;
+const NUBANK_AMOUNT_REGEX = /-?\s*R\$\s*[\d.]+,\d{2}/g;
+
+const parseBrazilianCurrency = (value: string) => {
+  const cleaned = value.replace(/[^\d,-]/g, '').replace(/\./g, '').replace(',', '.');
+  const parsed = Number(cleaned);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const extractNubankSectionLines = (text: string) => {
+  const lines = text
+    .split(/\r?\n/g)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+  let inSection = false;
+  const sectionLines: string[] = [];
+
+  lines.forEach((line) => {
+    if (NUBANK_SECTION_START.test(line)) {
+      inSection = true;
+      return;
+    }
+    if (inSection && NUBANK_SECTION_END.test(line)) {
+      inSection = false;
+      return;
+    }
+    if (inSection) {
+      sectionLines.push(line);
+    }
+  });
+
+  return sectionLines;
+};
+
+const cleanNubankDescription = (line: string) => {
+  let description = line.replace(NUBANK_DATE_REGEX, '').trim();
+  description = description.replace(/•{2,}\s*\d{4}\s*/g, '').trim();
+  description = description.replace(/-?\s*R\$\s*[\d.]+,\d{2}/g, '').trim();
+  return description;
+};
+
+const parseNubankTransactionsFromText = (
+  text: string,
+  sourceFile: string,
+  knownTagMap: Map<string, string[]>
+) => {
+  const lines = extractNubankSectionLines(text);
+  const entries: Array<{ date: string; lines: string[] }> = [];
+  let current: { date: string; lines: string[] } | null = null;
+
+  lines.forEach((line) => {
+    const dateMatch = line.match(NUBANK_DATE_REGEX);
+    if (dateMatch) {
+      if (current) {
+        entries.push(current);
+      }
+      current = { date: `${dateMatch[1]} ${dateMatch[2]}`, lines: [line] };
+    } else if (current) {
+      current.lines.push(line);
+    }
+  });
+
+  if (current) {
+    entries.push(current);
+  }
+
+  return entries
+    .map((entry, index) => {
+      const combined = entry.lines.join(' ');
+      const amountMatches = combined.match(NUBANK_AMOUNT_REGEX) ?? [];
+      const amountRaw = amountMatches[amountMatches.length - 1] ?? '';
+      if (!amountRaw) {
+        return null;
+      }
+
+      const amountValue = parseBrazilianCurrency(amountRaw);
+      const amount = amountRaw.includes('-') ? -amountValue : amountValue;
+      let description = cleanNubankDescription(entry.lines[0]);
+
+      if (!description) {
+        const fallbackLine = entry.lines.find((line) => !line.startsWith('USD') && !line.startsWith('Conversão'));
+        description = fallbackLine ? cleanNubankDescription(fallbackLine) : 'Transação';
+      }
+
+      const suggestedTags = inferTagsFromDescription(description, knownTagMap);
+      const tag = suggestedTags[0] ?? 'desconhecido';
+
+      return {
+        id: `${sourceFile}-${index}-${entry.date}`,
+        date: entry.date,
+        description,
+        amount,
+        amountLabel: amountRaw.replace(/\s+/g, ' ').trim(),
+        tag,
+        sourceFile
+      } as NubankParsedTransaction;
+    })
+    .filter((entry): entry is NubankParsedTransaction => Boolean(entry));
+};
+
 const formatTagLabel = (tag: string) => {
   if (!tag) {
     return '';
@@ -619,6 +732,10 @@ Agendados
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [isTagManuallySelected, setIsTagManuallySelected] = useState(false);
   const lastDescriptionRef = useRef<string>("");
+  const [nubankFiles, setNubankFiles] = useState<File[]>([]);
+  const [nubankTransactions, setNubankTransactions] = useState<NubankParsedTransaction[]>([]);
+  const [nubankIsParsing, setNubankIsParsing] = useState(false);
+  const [nubankError, setNubankError] = useState<string | null>(null);
 
   // Ajusta a altura do textarea automaticamente
   useEffect(() => {
@@ -1275,6 +1392,72 @@ Agendados
     }
   };
 
+  const handleNubankFilesSelected = (files: FileList | null) => {
+    if (!files) {
+      return;
+    }
+
+    const fileArray = Array.from(files).filter((file) => file.type === 'application/pdf');
+    if (fileArray.length === 0) {
+      setNubankError('Selecione arquivos PDF da Nubank.');
+      return;
+    }
+
+    setNubankFiles(fileArray);
+    setNubankError(null);
+  };
+
+  const handleParseNubankInvoices = async () => {
+    if (nubankFiles.length === 0) {
+      setNubankError('Adicione ao menos um PDF da Nubank.');
+      return;
+    }
+
+    setNubankIsParsing(true);
+    setNubankError(null);
+
+    try {
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/legacy/build/pdf.worker.min.js',
+        import.meta.url
+      ).toString();
+
+      const parsedTransactions: NubankParsedTransaction[] = [];
+
+      for (const file of nubankFiles) {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+        let textContent = '';
+
+        for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
+          const page = await pdf.getPage(pageIndex);
+          const content = await page.getTextContent();
+          const pageText = content.items
+            .map((item: { str: string }) => item.str)
+            .join('\n');
+          textContent += `${pageText}\n`;
+        }
+
+        const parsed = parseNubankTransactionsFromText(textContent, file.name, knownTagMap);
+        parsedTransactions.push(...parsed);
+      }
+
+      setNubankTransactions(parsedTransactions);
+    } catch (error) {
+      console.error('Erro ao ler fatura Nubank:', error);
+      setNubankError('Não foi possível ler o PDF. Verifique o arquivo e tente novamente.');
+    } finally {
+      setNubankIsParsing(false);
+    }
+  };
+
+  const handleClearNubank = () => {
+    setNubankFiles([]);
+    setNubankTransactions([]);
+    setNubankError(null);
+  };
+
   // Função para extrair multiplicador da descrição (ex: "BHx3" -> 3, "Valorant x3" -> 3)
   const getMultiplierFromDescription = (description: string): number => {
     const match = description.match(/\s*x\s*(\d+)$/i);
@@ -1354,6 +1537,26 @@ Agendados
     });
     return map;
   }, [transactions]);
+
+  const nubankSummary = useMemo(() => {
+    if (nubankTransactions.length === 0) {
+      return { total: 0, count: 0, positive: 0, negative: 0 };
+    }
+
+    return nubankTransactions.reduce(
+      (acc, transaction) => {
+        acc.total += transaction.amount;
+        acc.count += 1;
+        if (transaction.amount >= 0) {
+          acc.positive += transaction.amount;
+        } else {
+          acc.negative += transaction.amount;
+        }
+        return acc;
+      },
+      { total: 0, count: 0, positive: 0, negative: 0 }
+    );
+  }, [nubankTransactions]);
 
   const expenseReportByMonth = useMemo<ExpenseMonthReport[]>(() => {
     const expenses = transactions.filter(t => t.type === 'expense');
@@ -2815,6 +3018,87 @@ Agendados
           </ExpenseReportMonths>
         )}
       </ExpenseReportSection>
+
+      {isAuthenticated && (
+        <NubankSection>
+          <NubankHeader>
+            <div>
+              <NubankTitle>📑 Leitor de Faturas Nubank</NubankTitle>
+              <NubankSubtitle>
+                Faça upload das faturas em PDF e gere um relatório apenas com as transações.
+              </NubankSubtitle>
+            </div>
+            <NubankActions>
+              <NubankActionButton type="button" onClick={handleParseNubankInvoices} disabled={nubankIsParsing}>
+                {nubankIsParsing ? 'Processando...' : 'Processar PDFs'}
+              </NubankActionButton>
+              <NubankSecondaryButton type="button" onClick={handleClearNubank} disabled={nubankIsParsing}>
+                Limpar
+              </NubankSecondaryButton>
+            </NubankActions>
+          </NubankHeader>
+
+          <NubankUploadCard>
+            <NubankUploadTitle>Adicionar faturas</NubankUploadTitle>
+            <NubankUploadHint>Somente PDFs da Nubank com a aba de transações.</NubankUploadHint>
+            <NubankUploadInput
+              type="file"
+              accept="application/pdf"
+              multiple
+              onChange={(event) => handleNubankFilesSelected(event.target.files)}
+            />
+            {nubankFiles.length > 0 && (
+              <NubankFileList>
+                {nubankFiles.map((file) => (
+                  <li key={file.name}>{file.name}</li>
+                ))}
+              </NubankFileList>
+            )}
+            {nubankError && <NubankError>{nubankError}</NubankError>}
+          </NubankUploadCard>
+
+          <NubankSummaryGrid>
+            <NubankSummaryCard>
+              <span>Total de transações</span>
+              <strong>{nubankSummary.count}</strong>
+            </NubankSummaryCard>
+            <NubankSummaryCard>
+              <span>Total geral</span>
+              <strong>R$ {formatCurrency(nubankSummary.total)}</strong>
+            </NubankSummaryCard>
+            <NubankSummaryCard>
+              <span>Compras</span>
+              <strong>R$ {formatCurrency(nubankSummary.positive)}</strong>
+            </NubankSummaryCard>
+            <NubankSummaryCard>
+              <span>Estornos/Créditos</span>
+              <strong>R$ {formatCurrency(Math.abs(nubankSummary.negative))}</strong>
+            </NubankSummaryCard>
+          </NubankSummaryGrid>
+
+          <NubankTransactions>
+            {nubankTransactions.length === 0 ? (
+              <NubankEmpty>Envie PDFs e clique em “Processar PDFs”.</NubankEmpty>
+            ) : (
+              nubankTransactions.map((transaction) => (
+                <NubankTransactionCard key={transaction.id}>
+                  <NubankTransactionHeader>
+                    <span>{transaction.date}</span>
+                    <NubankTag>#{formatTagLabel(transaction.tag)}</NubankTag>
+                  </NubankTransactionHeader>
+                  <NubankTransactionBody>
+                    <strong>{transaction.description}</strong>
+                    <span>{transaction.sourceFile}</span>
+                  </NubankTransactionBody>
+                  <NubankAmount $isNegative={transaction.amount < 0}>
+                    {transaction.amountLabel}
+                  </NubankAmount>
+                </NubankTransactionCard>
+              ))
+            )}
+          </NubankTransactions>
+        </NubankSection>
+      )}
 
 
 
@@ -4935,6 +5219,226 @@ const ExpenseTagSelect = styled.select`
   font-size: 0.7rem;
   font-weight: 600;
   outline: none;
+`;
+
+const NubankSection = styled.section`
+  margin: 1.5rem 0 2rem;
+  padding: 1.2rem;
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const NubankHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+`;
+
+const NubankTitle = styled.h2`
+  font-size: 1.4rem;
+  color: #f8fafc;
+  margin: 0;
+`;
+
+const NubankSubtitle = styled.p`
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0.35rem 0 0;
+  max-width: 560px;
+`;
+
+const NubankActions = styled.div`
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+`;
+
+const NubankActionButton = styled.button`
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &:hover:not(:disabled) {
+    background: #4f46e5;
+    transform: translateY(-1px);
+  }
+`;
+
+const NubankSecondaryButton = styled.button`
+  background: transparent;
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: rgba(148, 163, 184, 0.7);
+  }
+`;
+
+const NubankUploadCard = styled.div`
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 14px;
+  padding: 1rem;
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+`;
+
+const NubankUploadTitle = styled.h3`
+  font-size: 0.95rem;
+  margin: 0;
+  color: #e2e8f0;
+`;
+
+const NubankUploadHint = styled.span`
+  font-size: 0.75rem;
+  color: #94a3b8;
+`;
+
+const NubankUploadInput = styled.input`
+  background: #0f172a;
+  border-radius: 10px;
+  padding: 0.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+`;
+
+const NubankFileList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  li {
+    font-size: 0.75rem;
+    color: #e2e8f0;
+    background: rgba(15, 23, 42, 0.6);
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
+`;
+
+const NubankError = styled.div`
+  color: #fca5a5;
+  font-size: 0.8rem;
+`;
+
+const NubankSummaryGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+`;
+
+const NubankSummaryCard = styled.div`
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 12px;
+  padding: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  span {
+    font-size: 0.75rem;
+    color: #94a3b8;
+  }
+
+  strong {
+    font-size: 1.05rem;
+    color: #f8fafc;
+  }
+`;
+
+const NubankTransactions = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+`;
+
+const NubankTransactionCard = styled.div`
+  background: rgba(2, 6, 23, 0.75);
+  border-radius: 14px;
+  padding: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+`;
+
+const NubankTransactionHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #94a3b8;
+`;
+
+const NubankTag = styled.span`
+  background: rgba(99, 102, 241, 0.2);
+  color: #c7d2fe;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+`;
+
+const NubankTransactionBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  strong {
+    color: #f8fafc;
+    font-size: 0.9rem;
+  }
+
+  span {
+    color: #94a3b8;
+    font-size: 0.7rem;
+  }
+`;
+
+const NubankAmount = styled.span<{ $isNegative: boolean }>`
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: ${props => props.$isNegative ? '#f87171' : '#4ade80'};
+`;
+
+const NubankEmpty = styled.div`
+  text-align: center;
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.3);
+  color: #94a3b8;
+  font-size: 0.85rem;
 `;
 
 const ExpenseItemAmount = styled.div`
