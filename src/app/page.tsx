@@ -489,7 +489,10 @@ const parseBrazilianCurrency = (value: string) => {
   const normalized = value.replace(/\u2212/g, '-');
   const cleaned = normalized.replace(/[^\d,-]/g, '').replace(/\./g, '').replace(',', '.');
   const parsed = Number(cleaned);
-  return Number.isNaN(parsed) ? 0 : parsed;
+  if (Number.isNaN(parsed)) {
+    return 0;
+  }
+  return Math.abs(parsed);
 };
 
 const toTitleCase = (value: string) => {
@@ -706,6 +709,87 @@ const cleanNubankDescription = (line: string) => {
   return description;
 };
 
+const buildNubankEntryLines = (lines: string[]) => {
+  const entryLines: string[] = [];
+  let currentLine = '';
+
+  lines.forEach((line) => {
+    if (NUBANK_DATE_REGEX.test(line)) {
+      if (currentLine) {
+        entryLines.push(currentLine.trim());
+      }
+      currentLine = line;
+      return;
+    }
+
+    if (currentLine) {
+      currentLine = `${currentLine} ${line}`.trim();
+    }
+  });
+
+  if (currentLine) {
+    entryLines.push(currentLine.trim());
+  }
+
+  return entryLines;
+};
+
+const splitNubankEntry = (entryLine: string) => {
+  const dateMatch = entryLine.match(NUBANK_DATE_REGEX);
+  if (!dateMatch) {
+    return [];
+  }
+  const date = `${dateMatch[1]} ${dateMatch[2]}`;
+  let rest = entryLine.replace(NUBANK_DATE_REGEX, '').trim();
+  if (!rest) {
+    return [];
+  }
+
+  const normalized = normalizeText(rest);
+  const hasTotal = normalized.includes('total a pagar');
+  const hasConversion = normalized.includes('conversao') || normalized.includes('usd') || normalized.includes('brl');
+  const amountMatches = Array.from(rest.matchAll(NUBANK_AMOUNT_REGEX));
+  const shouldSplit = amountMatches.length > 1 && !hasTotal && !hasConversion;
+
+  if (!shouldSplit) {
+    return [{ date, rawLine: rest }];
+  }
+
+  const segments: Array<{ date: string; rawLine: string }> = [];
+  let prevIndex = 0;
+
+  amountMatches.forEach((match) => {
+    const endIndex = (match.index ?? 0) + match[0].length;
+    const segment = rest.slice(prevIndex, endIndex).trim();
+    if (segment) {
+      segments.push({ date, rawLine: segment });
+    }
+    prevIndex = endIndex;
+  });
+
+  return segments;
+};
+
+const extractAmountFromSegment = (segment: string) => {
+  const hasInstallment = /parcela\s*\d+\/\d+/i.test(segment);
+  let searchSegment = segment;
+
+  if (!hasInstallment) {
+    searchSegment = searchSegment.replace(/total a pagar:.*$/i, '');
+    searchSegment = searchSegment.replace(/\bBRL\b.*$/i, '');
+    searchSegment = searchSegment.replace(/\bUSD\b.*$/i, '');
+    searchSegment = searchSegment.replace(/conversao:.*$/i, '');
+  }
+
+  const matches = Array.from(searchSegment.matchAll(NUBANK_AMOUNT_REGEX));
+  if (matches.length === 0) {
+    return { amountRaw: '', hasInstallment };
+  }
+
+  const selected = hasInstallment ? matches[matches.length - 1][0] : matches[0][0];
+  return { amountRaw: selected, hasInstallment };
+};
+
 const parseNubankTransactionsFromText = (
   text: string,
   sourceFile: string,
@@ -719,30 +803,22 @@ const parseNubankTransactionsFromText = (
   const lines = sectionLines.length > 0
     ? Array.from(new Set([...sectionLines, ...extraLines]))
     : allLines;
-  const entries: Array<{ date: string; lines: string[] }> = [];
-  let current: { date: string; lines: string[] } | null = null;
+  const entryLines = buildNubankEntryLines(lines);
+  const segments = entryLines.flatMap((entryLine) => splitNubankEntry(entryLine));
 
-  lines.forEach((line) => {
-    const dateMatch = line.match(NUBANK_DATE_REGEX);
-    if (dateMatch) {
-      if (current) {
-        entries.push(current);
+  const parsedEntries = segments
+    .map((segment, index) => {
+      const segmentRaw = segment.rawLine.replace(/pagamentos e financiamentos.*$/i, '').trim();
+      if (!segmentRaw) {
+        return null;
       }
-      current = { date: `${dateMatch[1]} ${dateMatch[2]}`, lines: [line] };
-    } else if (current) {
-      current.lines.push(line);
-    }
-  });
 
-  if (current) {
-    entries.push(current);
-  }
+      const normalizedSegment = normalizeText(segmentRaw);
+      if (normalizedSegment.includes('pagamentos e financiamentos')) {
+        return null;
+      }
 
-  const parsedEntries = entries
-    .map((entry, index) => {
-      const combined = entry.lines.join(' ');
-      const amountMatches = combined.match(NUBANK_AMOUNT_REGEX) ?? [];
-      const amountRaw = amountMatches[amountMatches.length - 1] ?? '';
+      const { amountRaw, hasInstallment } = extractAmountFromSegment(segmentRaw);
       if (!amountRaw) {
         return null;
       }
@@ -750,31 +826,24 @@ const parseNubankTransactionsFromText = (
       const amountValue = parseBrazilianCurrency(amountRaw);
       const isNegative = amountRaw.includes('-') || amountRaw.includes('−') || amountRaw.includes('–');
       const amount = isNegative ? -amountValue : amountValue;
-      let description = cleanNubankDescription(combined);
+      let description = cleanNubankDescription(segmentRaw);
 
       if (!description) {
-        const fallbackLine = entry.lines.find((line) =>
-          /R\$\s*[\d.]+,\d{2}/.test(line) || /•{2,}/.test(line) || /parcela/i.test(line)
-        );
-        description = fallbackLine ? cleanNubankDescription(fallbackLine) : '';
-      }
-
-      if (!description) {
-        description = normalizeMerchantBase(combined);
+        description = normalizeMerchantBase(segmentRaw);
       }
 
       if (!description) {
         description = 'Transação';
       }
 
-      const { name: normalizedName, tags: inferredTags } = classifyNubankTransaction(description || combined, amount);
-      const installmentInfo = extractInstallmentInfo(combined, normalizedName, amountValue);
+      const { name: normalizedName, tags: inferredTags } = classifyNubankTransaction(description, amount);
+      const installmentInfo = extractInstallmentInfo(segmentRaw, normalizedName, amountValue);
       const tagsFromHistory = inferTagsFromDescription(normalizedName, knownTagMap);
       let tags = Array.from(
         new Set([
           ...inferredTags,
           ...tagsFromHistory,
-          ...(installmentInfo.isInstallment ? ['Parcelamento'] : [])
+          ...(hasInstallment || installmentInfo.isInstallment ? ['Parcelamento'] : [])
         ])
       );
       if (tags.length > 1) {
@@ -787,8 +856,8 @@ const parseNubankTransactionsFromText = (
         JSON.stringify(
           {
             sourceFile,
-            rawLine: combined,
-            date: entry.date,
+            rawLine: `${segment.date} ${segmentRaw}`,
+            date: segment.date,
             amountRaw,
             amount,
             direction,
@@ -806,8 +875,8 @@ const parseNubankTransactionsFromText = (
       );
 
       return {
-        id: `${sourceFile}-${index}-${entry.date}`,
-        date: entry.date,
+        id: `${sourceFile}-${index}-${segment.date}`,
+        date: segment.date,
         description,
         normalizedName,
         amount,
@@ -819,7 +888,7 @@ const parseNubankTransactionsFromText = (
         installmentNumber: installmentInfo.installmentNumber,
         installmentTotal: installmentInfo.installmentTotal,
         installmentGroupId: installmentInfo.installmentGroupId,
-        rawLine: combined,
+        rawLine: `${segment.date} ${segmentRaw}`,
         sourceFile
       } as NubankParsedTransaction;
     })
