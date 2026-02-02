@@ -513,6 +513,10 @@ const normalizeMerchantBase = (raw: string) => {
   }
 
   merchant = merchant
+    .replace(/^\d{2}\s+[A-Z]{3}\s*/i, '')
+    .replace(/\b\d+\s+de\s+\d+\b\s+iago.*$/i, '')
+    .replace(/\b\d+\s+de\s+\d+\b\s+fatura.*$/i, '')
+    .replace(/transacoes de.*$/i, '')
     .replace(/parcelamento de compra/i, '')
     .replace(/credito de parcelamento de compra/i, '')
     .replace(/iof de/i, '')
@@ -523,6 +527,10 @@ const normalizeMerchantBase = (raw: string) => {
     .replace(/•{2,}\s*\d{4}\s*/g, '')
     .replace(/-?\s*nu ?pay/gi, '')
     .replace(/-?\s*nupay/gi, '')
+    .replace(/brl\s*\d+(\.\d+)?\s*=\s*usd\s*\d+(\.\d+)?/gi, '')
+    .replace(/usd\s*\d+(\.\d+)?/gi, '')
+    .replace(/conversao:.*$/i, '')
+    .replace(/[-−–]?\s*R\$\s*[\d.]+,\d{2}/g, '')
     .replace(/\*/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -548,17 +556,17 @@ const extractInstallmentInfo = (raw: string, normalizedName: string, amountValue
   };
 };
 
-const NUBANK_TAG_RULES: Array<{ match: RegExp; name: string; tags: string[] }> = [
+const NUBANK_TAG_RULES: Array<{ match: RegExp; name?: string; tags: string[]; useMerchantName?: boolean }> = [
   { match: /\buber\b/i, name: 'Uber', tags: ['Uber', 'Transporte'] },
   { match: /\b99\b|\b99 - nupay\b|\b99 - nu ?pay\b/i, name: '99', tags: ['99', 'Transporte'] },
   { match: /\bifd\b|\bifood\b/i, name: 'iFood', tags: ['iFood', 'Alimentação', 'Delivery'] },
   { match: /\bpadaria\b|\bpastelaria\b|\blanche|\bpao\b|\bpadaria\b/i, name: 'Padaria', tags: ['Padaria', 'Alimentação'] },
-  { match: /\bsupermercad|\bsacolao|\bmercado\b/i, name: 'Supermercado', tags: ['Mercado', 'Supermercado'] },
-  { match: /\bdrogaria|\bfarmacia|\bdrogarias/i, name: 'Farmácia', tags: ['Farmácia', 'Saúde'] },
-  { match: /\bamazon\b|\bmercadolivre\b|\bshein\b|\bvindi\b|\binsider\b/i, name: 'E-commerce', tags: ['Compras', 'Online'] },
-  { match: /\bgoogle\b|\bsupabase\b|\bcursor\b|\bhostinger\b|\bmeli\b/i, name: 'Assinaturas', tags: ['Assinatura', 'Serviços'] },
-  { match: /\bpizza\b|\bgrill\b|\brestaurante\b|\bpizzaria\b|\bdelivery\b|\bze delivery\b/i, name: 'Restaurante', tags: ['Alimentação'] },
-  { match: /\bloteria|\bloteriasonline/i, name: 'Loteria', tags: ['Loteria', 'Jogos'] }
+  { match: /\bsupermercad|\bsacolao|\bmercado\b/i, tags: ['Mercado', 'Supermercado'], useMerchantName: true },
+  { match: /\bdrogaria|\bfarmacia|\bdrogarias/i, tags: ['Farmácia', 'Saúde'], useMerchantName: true },
+  { match: /\bamazon\b|\bmercadolivre\b|\bshein\b|\bvindi\b|\binsider\b/i, tags: ['Compras', 'Online'], useMerchantName: true },
+  { match: /\bgoogle\b|\bsupabase\b|\bcursor\b|\bhostinger\b|\bmeli\b/i, tags: ['Assinatura', 'Serviços'], useMerchantName: true },
+  { match: /\bpizza\b|\bgrill\b|\brestaurante\b|\bpizzaria\b|\bdelivery\b|\bze delivery\b/i, tags: ['Alimentação'], useMerchantName: true },
+  { match: /\bloteria|\bloteriasonline/i, tags: ['Loteria', 'Jogos'], useMerchantName: true }
 ];
 
 const classifyNubankTransaction = (raw: string, amountValue: number) => {
@@ -583,7 +591,10 @@ const classifyNubankTransaction = (raw: string, amountValue: number) => {
   const merchantNormalized = normalizeText(merchant);
   const rule = NUBANK_TAG_RULES.find((candidate) => candidate.match.test(merchantNormalized));
   if (rule) {
-    return { name: rule.name, tags: rule.tags };
+    const name = rule.useMerchantName && merchant
+      ? toTitleCase(merchant)
+      : (rule.name ?? (merchant ? toTitleCase(merchant) : 'Transação'));
+    return { name, tags: rule.tags };
   }
 
   const fallbackName = merchant ? toTitleCase(merchant) : 'Transação';
@@ -595,6 +606,42 @@ const getNubankLines = (text: string) => {
     .split(/\r?\n/g)
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
+};
+
+const isNubankNoiseLine = (line: string) => {
+  const normalized = normalizeText(line);
+  if (!normalized) {
+    return true;
+  }
+
+  if (NUBANK_DATE_REGEX.test(line) || /R\$\s*[\d.]+,\d{2}/.test(line)) {
+    return false;
+  }
+
+  if (/^\d+\s+de\s+\d+$/i.test(normalized)) {
+    return true;
+  }
+
+  const noiseTokens = [
+    'iago luan da cruz de jesus',
+    'fatura',
+    'emissao',
+    'envio',
+    'transacoes de',
+    'pagamentos e financiamentos',
+    'resumo da fatura',
+    'limites disponiveis',
+    'valor maximo para transacoes',
+    'alternativas de pagamento',
+    'nu pagamentos',
+    'ouvidoria',
+    'sac',
+    'capitais e regioes',
+    'demais localidades',
+    'encargos e custo'
+  ];
+
+  return noiseTokens.some((token) => normalized.includes(token));
 };
 
 const extractNubankSectionLines = (text: string) => {
@@ -641,13 +688,16 @@ const extractNubankSectionLines = (text: string) => {
     }
   }
 
-  return { sectionLines, foundSection, lines };
+  const filteredLines = sectionLines.filter((line) => !isNubankNoiseLine(line));
+  const fallbackLines = lines.filter((line) => !isNubankNoiseLine(line));
+  return { sectionLines: filteredLines, foundSection, lines: fallbackLines };
 };
 
 const cleanNubankDescription = (line: string) => {
   let description = line.replace(NUBANK_DATE_REGEX, '').trim();
   description = description.replace(/•{2,}\s*\d{4}\s*/g, '').trim();
   description = description.replace(/[-−–]?\s*R\$\s*[\d.]+,\d{2}/g, '').trim();
+  description = description.replace(/\b\d+\s+de\s+\d+\b.*$/i, '').trim();
   return description;
 };
 
@@ -689,17 +739,36 @@ const parseNubankTransactionsFromText = (
 
       const amountValue = parseBrazilianCurrency(amountRaw);
       const amount = /[-−–]/.test(amountRaw) ? -amountValue : amountValue;
-      let description = cleanNubankDescription(entry.lines[0]);
+      let description = cleanNubankDescription(combined);
 
       if (!description) {
-        const fallbackLine = entry.lines.find((line) => !line.startsWith('USD') && !line.startsWith('Conversão'));
-        description = fallbackLine ? cleanNubankDescription(fallbackLine) : 'Transação';
+        const fallbackLine = entry.lines.find((line) =>
+          /R\$\s*[\d.]+,\d{2}/.test(line) || /•{2,}/.test(line) || /parcela/i.test(line)
+        );
+        description = fallbackLine ? cleanNubankDescription(fallbackLine) : '';
       }
 
-      const { name: normalizedName, tags: inferredTags } = classifyNubankTransaction(description, amount);
-      const installmentInfo = extractInstallmentInfo(description, normalizedName, amountValue);
+      if (!description) {
+        description = normalizeMerchantBase(combined);
+      }
+
+      if (!description) {
+        description = 'Transação';
+      }
+
+      const { name: normalizedName, tags: inferredTags } = classifyNubankTransaction(combined, amount);
+      const installmentInfo = extractInstallmentInfo(combined, normalizedName, amountValue);
       const tagsFromHistory = inferTagsFromDescription(normalizedName, knownTagMap);
-      const tags = Array.from(new Set([...inferredTags, ...tagsFromHistory]));
+      let tags = Array.from(
+        new Set([
+          ...inferredTags,
+          ...tagsFromHistory,
+          ...(installmentInfo.isInstallment ? ['Parcelamento'] : [])
+        ])
+      );
+      if (tags.length > 1) {
+        tags = tags.filter((tag) => tag !== 'desconhecido');
+      }
       const tag = tags[0] ?? 'desconhecido';
       const direction: 'entrada' | 'saida' = amount < 0 ? 'entrada' : 'saida';
 
