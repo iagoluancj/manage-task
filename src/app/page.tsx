@@ -214,6 +214,9 @@ const parseTags = (tagsInput?: Transaction['tags']) => {
 
 const MAX_CARD_ITEMS = 3;
 const MAX_TOOLTIP_ITEMS = 10;
+const UBER_GROUP_KEY = 'uber';
+const UBER_GROUP_LABEL = 'Uber';
+const IAGO_CREDIT_CARD_ADJUSTMENT = 1717;
 
 const limitTooltipItems = (items: string[], limit = MAX_TOOLTIP_ITEMS) => {
   if (items.length <= limit) {
@@ -1033,8 +1036,13 @@ Agendados
     .filter(t => t.type === 'invoice_payment')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // Novo valor de Saídas Crédito (crédito - faturas pagas)
-  const totalExpenseCreditNet = Math.max(0, totalExpenseCredit - totalInvoicePayments);
+  // Valor base de Saídas Crédito (crédito - faturas pagas)
+  const totalExpenseCreditNetBase = Math.max(0, totalExpenseCredit - totalInvoicePayments);
+
+  // Ajuste histórico para o usuário Iago:
+  // o card "Saídas Crédito" precisa somar R$ 1.717,00 para refletir os números reais.
+  const totalExpenseCreditAdjustment = currentUser === 'iago' ? IAGO_CREDIT_CARD_ADJUSTMENT : 0;
+  const totalExpenseCreditNet = totalExpenseCreditNetBase + totalExpenseCreditAdjustment;
 
   const tagOptions = useMemo(() => {
     const tagsMap = new Map<string, string>();
@@ -1096,7 +1104,13 @@ Agendados
         const cleanedName = stripMultiplierSuffix(transaction.description);
         const displayName = cleanedName || transaction.description || 'Sem descricao';
         const normalizedName = normalizeText(cleanedName || transaction.description);
-        const groupKey = normalizedName || normalizeText(displayName) || 'sem-descricao';
+        // Regra equivalente ao ILIKE '%uber%': qualquer descrição contendo "uber"
+        // entra no mesmo agrupamento para evitar separar "Uber", "Vale: Uber", etc.
+        const isUberGroup = normalizedName.includes(UBER_GROUP_KEY);
+        const groupKey = isUberGroup
+          ? UBER_GROUP_KEY
+          : (normalizedName || normalizeText(displayName) || 'sem-descricao');
+        const groupName = isUberGroup ? UBER_GROUP_LABEL : displayName;
 
         const existingGroup = groupsMap.get(groupKey);
         const nextItem: ExpenseReportItem = {
@@ -1112,7 +1126,7 @@ Agendados
         } else {
           groupsMap.set(groupKey, {
             key: groupKey,
-            name: displayName,
+            name: groupName,
             total: effectiveAmount,
             count: 1,
             items: [nextItem]
