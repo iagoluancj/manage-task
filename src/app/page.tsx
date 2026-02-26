@@ -216,7 +216,6 @@ const MAX_CARD_ITEMS = 3;
 const MAX_TOOLTIP_ITEMS = 10;
 const UBER_GROUP_KEY = 'uber';
 const UBER_GROUP_LABEL = 'Uber';
-const IAGO_CREDIT_CARD_ADJUSTMENT = 1717;
 
 const limitTooltipItems = (items: string[], limit = MAX_TOOLTIP_ITEMS) => {
   if (items.length <= limit) {
@@ -1036,14 +1035,8 @@ Agendados
     .filter(t => t.type === 'invoice_payment')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // Valor base de Saídas Crédito (crédito - faturas pagas).
-  const totalExpenseCreditNetBase = Math.max(0, totalExpenseCredit - totalInvoicePayments);
-
-  // Ajuste histórico solicitado para o usuário Iago:
-  // foi usado manualmente como "Valor p/ Ajustar card 'saidas crédito'" (R$ 1.717,00),
-  // então aplicamos por código para manter o card "Saídas Crédito" fiel à realidade.
-  const totalExpenseCreditAdjustment = currentUser === 'iago' ? IAGO_CREDIT_CARD_ADJUSTMENT : 0;
-  const totalExpenseCreditNet = Math.max(0, totalExpenseCreditNetBase - totalExpenseCreditAdjustment);
+  // Novo valor de Saídas Crédito (crédito - faturas pagas)
+  const totalExpenseCreditNet = Math.max(0, totalExpenseCredit - totalInvoicePayments);
 
   const tagOptions = useMemo(() => {
     const tagsMap = new Map<string, string>();
