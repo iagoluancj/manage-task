@@ -37,12 +37,15 @@ interface TaskStatus {
   isOverdue?: boolean;
 }
 
+type TransactionType = 'income' | 'expense' | 'invoice_payment';
+type PaymentMethod = 'credit' | 'debit';
+
 interface Transaction {
   id?: string;
   description: string;
   amount: number;
-  type: 'income' | 'expense' | 'invoice_payment';
-  paymentMethod?: 'credit' | 'debit';
+  type: TransactionType;
+  paymentMethod?: PaymentMethod;
   created_at?: string;
   category?: string;
   tags?: string[] | string | null;
@@ -324,6 +327,7 @@ Agendados
   // Estados para controle financeiro
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [newTransaction, setNewTransaction] = useState("");
+  const [newTransactionLlm, setNewTransactionLlm] = useState("");
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
@@ -332,6 +336,7 @@ Agendados
   const itemsPerPage = 5;
   const [expenseReportSort, setExpenseReportSort] = useState<'count' | 'total'>('count');
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const [isSubmittingLlmTransaction, setIsSubmittingLlmTransaction] = useState(false);
 
   // Ajusta a altura do textarea automaticamente
   useEffect(() => {
@@ -774,6 +779,34 @@ Agendados
   }, [isAuthenticated, sortRoutineByTime]);
 
   // Funções para controle financeiro
+  const saveTransaction = async (payload: {
+    description: string;
+    amount: number;
+    type: TransactionType;
+    paymentMethod: PaymentMethod;
+  }): Promise<Transaction | null> => {
+    const res = await fetch('/api/transactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description: payload.description,
+        amount: Math.abs(payload.amount),
+        type: payload.type,
+        paymentMethod: payload.paymentMethod
+      }),
+    });
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const created = await res.json();
+    return {
+      ...created,
+      paymentMethod: created.paymentMethod ?? created.payment_method ?? payload.paymentMethod,
+    } as Transaction;
+  };
+
   const handleTransactionInput = async (value: string, cursorPosition?: number | null) => {
     setNewTransaction(value);
     setSelectedSuggestionIndex(-1);
@@ -895,8 +928,8 @@ Agendados
       (descLower.includes('cartao') || descLower.includes('credito'));
 
     // Determina o tipo e método de pagamento
-    let type: 'income' | 'expense' | 'invoice_payment';
-    let paymentMethod: 'credit' | 'debit';
+    let type: TransactionType;
+    let paymentMethod: PaymentMethod;
 
     if (isInvoicePayment) {
       type = 'invoice_payment';
@@ -912,24 +945,15 @@ Agendados
     }
 
     try {
-      const res = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description,
-          amount: Math.abs(amount),
-          type,
-          paymentMethod
-        }),
+      const savedTransaction = await saveTransaction({
+        description,
+        amount: Math.abs(amount),
+        type,
+        paymentMethod
       });
 
-      if (res.ok) {
-        const newTransactionData = await res.json();
-        const normalized = {
-          ...newTransactionData,
-          paymentMethod: newTransactionData.paymentMethod ?? newTransactionData.payment_method ?? paymentMethod,
-        };
-        setTransactions([normalized as Transaction, ...transactions]);
+      if (savedTransaction) {
+        setTransactions((prev) => [savedTransaction, ...prev]);
         setNewTransaction("");
         setShowAutocomplete(false);
         setAutocompleteSuggestions([]);
@@ -942,6 +966,54 @@ Agendados
     } catch (error) {
       console.error('Erro ao adicionar transação:', error);
       toast.error('Erro ao adicionar transação!');
+    }
+  };
+
+  const handleAddTransactionWithLlm = async () => {
+    if (!newTransactionLlm.trim()) {
+      toast.error('Descreva a transação para IA!');
+      return;
+    }
+
+    setIsSubmittingLlmTransaction(true);
+
+    try {
+      const parseRes = await fetch('/api/transactions/llm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: newTransactionLlm.trim() })
+      });
+
+      const parseData = await parseRes.json();
+      const parsedTransaction = parseData?.transaction as
+        | {
+            description: string;
+            amount: number;
+            type: TransactionType;
+            paymentMethod: PaymentMethod;
+          }
+        | undefined;
+
+      if (!parseRes.ok || !parsedTransaction) {
+        toast.error(parseData?.error || 'Não foi possível interpretar a transação com IA.');
+        return;
+      }
+
+      const savedTransaction = await saveTransaction(parsedTransaction);
+      if (!savedTransaction) {
+        toast.error('Erro ao adicionar transação!');
+        return;
+      }
+
+      setTransactions((prev) => [savedTransaction, ...prev]);
+      setNewTransactionLlm("");
+      setCurrentPage(1);
+      toast.success('Transação adicionada via IA!', { duration: 2000 });
+    } catch (error) {
+      console.error('Erro ao adicionar transação via IA:', error);
+      toast.error('Erro ao adicionar transação via IA!');
+    } finally {
+      setIsSubmittingLlmTransaction(false);
     }
   };
 
@@ -1908,6 +1980,33 @@ Agendados
             Adicionar
           </FinanceButton>
         </FinanceForm>
+
+        <FinanceLlmContainer>
+          <FinanceLlmLabel>Nova label: Entrada via IA</FinanceLlmLabel>
+          <FinanceLlmHint>
+            Escreva em linguagem natural (ex: &quot;gastei 43,90 de uber no débito&quot;) e a IA lança para você.
+          </FinanceLlmHint>
+          <FinanceForm>
+            <FinanceInput
+              type="text"
+              placeholder="Ex: recebi 2700 de salário hoje"
+              value={newTransactionLlm}
+              onChange={(e) => setNewTransactionLlm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddTransactionWithLlm();
+                }
+              }}
+            />
+            <FinanceButton
+              onClick={handleAddTransactionWithLlm}
+              disabled={isSubmittingLlmTransaction}
+            >
+              {isSubmittingLlmTransaction ? 'Processando IA...' : 'Adicionar com IA'}
+            </FinanceButton>
+          </FinanceForm>
+        </FinanceLlmContainer>
 
         {/* Lista de Transações */}
         {(() => {
@@ -3909,6 +4008,39 @@ const FinanceForm = styled.div`
   }
 `;
 
+const FinanceLlmContainer = styled.div`
+  margin: -0.4rem 0 1.5rem;
+  border: 1px dashed rgba(59, 130, 246, 0.45);
+  border-radius: 12px;
+  padding: 0.85rem;
+  background: rgba(30, 41, 59, 0.4);
+
+  @media (max-width: 768px) {
+    padding: 0.75rem;
+    margin: -0.2rem 0 1rem;
+  }
+`;
+
+const FinanceLlmLabel = styled.span`
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #93c5fd;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+`;
+
+const FinanceLlmHint = styled.p`
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  color: #bfdbfe;
+
+  @media (max-width: 768px) {
+    font-size: 0.75rem;
+  }
+`;
+
 const FinanceInputContainer = styled.div`
   position: relative;
   flex: 1;
@@ -3996,9 +4128,16 @@ const FinanceButton = styled.button`
   white-space: nowrap;
   flex-shrink: 0;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: #2563eb;
     transform: translateY(-1px);
+  }
+
+  &:disabled {
+    background: #64748b;
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
   }
 
   @media (max-width: 768px) {
