@@ -198,7 +198,7 @@ const parseTags = (tagsInput?: Transaction['tags']) => {
         if (Array.isArray(parsed)) {
           return parsed.map((tag) => String(tag).trim()).filter(Boolean);
         }
-      } catch (_error) {
+      } catch {
         // fallback para split
       }
     }
@@ -1094,14 +1094,23 @@ Agendados
       const created = results.filter(Boolean) as Transaction[];
 
       if (created.length > 0) {
-        const normalized = created.map((t) => ({
-          ...t,
-          paymentMethod: (t as Transaction & { payment_method?: string }).paymentMethod ??
-            (t as Transaction & { payment_method?: string }).payment_method ??
-            t.paymentMethod
-        }));
+        const normalized: Transaction[] = created.map((t) => {
+          const withLegacy = t as Transaction & { payment_method?: string | undefined };
+          const raw =
+            withLegacy.paymentMethod ??
+            withLegacy.payment_method ??
+            t.paymentMethod;
 
-        setTransactions((prev) => [...normalized, ...prev]);
+          const paymentMethod: "credit" | "debit" | undefined =
+            raw === "debit" ? "debit" : raw === "credit" ? "credit" : undefined;
+
+          return {
+            ...t,
+            paymentMethod
+          };
+        });
+
+        setTransactions((prev: Transaction[]) => [...normalized, ...prev]);
         setAiSuggestions([]);
         setAiInput("");
         toast.success("Transações adicionadas com sucesso pela IA!", { duration: 2500 });
