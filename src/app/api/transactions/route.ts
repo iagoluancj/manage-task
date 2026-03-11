@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     try {
         const user = getUserFromRequest(req);
         const tableName = getTableName(user);
-        const { description, amount, type, paymentMethod } = await req.json();
+        const { description, amount, type, paymentMethod, createdAt } = await req.json();
 
         if (!description || amount === undefined || !type) {
             return NextResponse.json(
@@ -67,6 +67,28 @@ export async function POST(req: NextRequest) {
 
         const payment_method: 'credit' | 'debit' = paymentMethod === 'debit' ? 'debit' : 'credit';
 
+        let created_at: string | undefined;
+        if (createdAt && typeof createdAt === 'string') {
+            // Se vier apenas a data (YYYY-MM-DD), consideramos meio-dia no horário de Brasília (-03:00)
+            const dateOnlyMatch = createdAt.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (dateOnlyMatch) {
+                const [_, y, m, d] = dateOnlyMatch;
+                const brString = `${y}-${m}-${d}T12:00:00-03:00`;
+                const parsed = new Date(brString);
+                if (!Number.isNaN(parsed.getTime())) {
+                    created_at = parsed.toISOString();
+                }
+            } else {
+                const parsed = new Date(createdAt);
+                if (!Number.isNaN(parsed.getTime())) {
+                    created_at = parsed.toISOString();
+                }
+            }
+        }
+        if (!created_at) {
+            created_at = new Date().toISOString();
+        }
+
         const { data, error } = await supabase
             .from(tableName)
             .insert([
@@ -75,7 +97,7 @@ export async function POST(req: NextRequest) {
                     amount: Math.abs(amount), // Sempre positivo, o tipo define se é entrada ou saída
                     type: type,
                     payment_method,
-                    created_at: new Date().toISOString()
+                    created_at
                 }
             ])
             .select()

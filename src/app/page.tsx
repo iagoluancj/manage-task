@@ -333,6 +333,21 @@ Agendados
   const [expenseReportSort, setExpenseReportSort] = useState<'count' | 'total'>('count');
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
 
+  // Estados para IA (teste)
+  const [aiInput, setAiInput] = useState("");
+  const [aiIsLoading, setAiIsLoading] = useState(false);
+  const [aiIsSaving, setAiIsSaving] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<
+    {
+      description: string;
+      amount: number;
+      type: "income" | "expense" | "invoice_payment";
+      paymentMethod: "credit" | "debit";
+      date?: string;
+    }[]
+  >([]);
+
   // Ajusta a altura do textarea automaticamente
   useEffect(() => {
     if (editingQuickNotes && textareaRef.current) {
@@ -1000,6 +1015,104 @@ Agendados
       toast.error('Erro ao atualizar tag!');
     } finally {
       setEditingTagId(null);
+    }
+  };
+
+  // IA: interpretar texto em múltiplas transações (teste)
+  const handleAiParseTransactions = async () => {
+    if (!aiInput.trim()) return;
+
+    setAiIsLoading(true);
+    setAiError(null);
+
+    try {
+      const res = await fetch("/api/ai/parse-transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: aiInput })
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setAiError(data?.error ?? "Erro ao interpretar texto com IA.");
+        setAiSuggestions([]);
+        return;
+      }
+
+      const data = await res.json();
+      const suggestions = Array.isArray(data.transactions) ? data.transactions : [];
+
+      setAiSuggestions(suggestions);
+      if (suggestions.length === 0) {
+        setAiError("Nenhuma transação encontrada no texto.");
+      }
+    } catch (error) {
+      console.error("Erro ao chamar IA:", error);
+      setAiError("Erro ao chamar o serviço de IA.");
+      setAiSuggestions([]);
+    } finally {
+      setAiIsLoading(false);
+    }
+  };
+
+  const handleAiConfirmTransactions = async () => {
+    if (aiSuggestions.length === 0) return;
+
+    setAiIsSaving(true);
+    setAiError(null);
+
+    try {
+      const results: (Transaction | null)[] = await Promise.all(
+        aiSuggestions.map(async (t): Promise<Transaction | null> => {
+          const body: {
+            description: string;
+            amount: number;
+            type: "income" | "expense" | "invoice_payment";
+            paymentMethod: "credit" | "debit";
+            createdAt?: string;
+          } = {
+            description: t.description,
+            amount: t.amount,
+            type: t.type,
+            paymentMethod: t.paymentMethod,
+            createdAt: t.date
+          };
+
+          const res = await fetch("/api/transactions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+
+          if (!res.ok) return null;
+
+          const json = await res.json();
+          return json as Transaction;
+        })
+      );
+
+      const created = results.filter(Boolean) as Transaction[];
+
+      if (created.length > 0) {
+        const normalized = created.map((t) => ({
+          ...t,
+          paymentMethod: (t as Transaction & { payment_method?: string }).paymentMethod ??
+            (t as Transaction & { payment_method?: string }).payment_method ??
+            t.paymentMethod
+        }));
+
+        setTransactions((prev) => [...normalized, ...prev]);
+        setAiSuggestions([]);
+        setAiInput("");
+        toast.success("Transações adicionadas com sucesso pela IA!", { duration: 2500 });
+      } else {
+        setAiError("Nenhuma transação foi salva. Verifique os dados e tente novamente.");
+      }
+    } catch (error) {
+      console.error("Erro ao salvar transações da IA:", error);
+      setAiError("Erro ao salvar transações sugeridas.");
+    } finally {
+      setAiIsSaving(false);
     }
   };
 
@@ -1779,6 +1892,66 @@ Agendados
           <FinanceTitle>💰 Controle Financeiro</FinanceTitle>
           <FinanceSubtitle>Gerencie suas entradas e saídas</FinanceSubtitle>
         </FinanceHeader>
+
+        {/* Lançamento com IA (teste) */}
+        <FinanceAiBox>
+          <FinanceAiHeader>
+            <FinanceAiTitle>Lançar com IA (teste)</FinanceAiTitle>
+            <FinanceAiTag>Beta</FinanceAiTag>
+          </FinanceAiHeader>
+          <FinanceAiTextarea
+            placeholder="Ex: Ontem uber 18,90 no crédito e hoje pizza 42 no débito.&#10;Ou cole um resumo das despesas dos últimos dias."
+            value={aiInput}
+            onChange={(e) => setAiInput(e.target.value)}
+          />
+          <FinanceAiActions>
+            <FinanceAiButton
+              type="button"
+              disabled={!aiInput.trim() || aiIsLoading}
+              onClick={handleAiParseTransactions}
+            >
+              {aiIsLoading ? "Interpretando..." : "Interpretar texto com IA"}
+            </FinanceAiButton>
+            {aiError && <FinanceAiError>{aiError}</FinanceAiError>}
+          </FinanceAiActions>
+          {aiSuggestions.length > 0 && (
+            <FinanceAiPreview>
+              <FinanceAiPreviewHeader>
+                <span>Sugestões de lançamentos</span>
+                <FinanceAiSmallText>Revise antes de confirmar</FinanceAiSmallText>
+              </FinanceAiPreviewHeader>
+              <FinanceAiPreviewList>
+                {aiSuggestions.map((t, index) => (
+                  <FinanceAiPreviewItem key={index}>
+                    <div>
+                      <strong>{t.description}</strong>
+                      <FinanceAiSmallText>
+                        {t.date ?? "sem data definida"} • {t.paymentMethod === "debit" ? "Débito" : "Crédito"}
+                      </FinanceAiSmallText>
+                    </div>
+                    <span>
+                      R$ {t.amount.toFixed(2).replace(".", ",")}{" "}
+                      <FinanceAiTypeTag $type={t.type}>
+                        {t.type === "income"
+                          ? "Entrada"
+                          : t.type === "invoice_payment"
+                          ? "Fatura"
+                          : "Saída"}
+                      </FinanceAiTypeTag>
+                    </span>
+                  </FinanceAiPreviewItem>
+                ))}
+              </FinanceAiPreviewList>
+              <FinanceAiConfirmButton
+                type="button"
+                disabled={aiIsSaving}
+                onClick={handleAiConfirmTransactions}
+              >
+                {aiIsSaving ? "Salvando..." : "Adicionar todos ao controle financeiro"}
+              </FinanceAiConfirmButton>
+            </FinanceAiPreview>
+          )}
+        </FinanceAiBox>
 
         {/* Cards de Resumo */}
         <FinanceCards>
@@ -3720,6 +3893,236 @@ const FinanceSection = styled.div`
     margin-bottom: 0.75rem;
     width: 100%;
     max-width: 100%;
+  }
+`;
+
+const FinanceAiBox = styled.div`
+  margin-bottom: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  @media (max-width: 768px) {
+    padding: 0.8rem 0.9rem;
+    margin-bottom: 0.75rem;
+  }
+`;
+
+const FinanceAiHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+`;
+
+const FinanceAiTitle = styled.h3`
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #e5e7eb;
+  margin: 0;
+`;
+
+const FinanceAiTag = styled.span`
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.18);
+  color: #bfdbfe;
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+`;
+
+const FinanceAiTextarea = styled.textarea`
+  width: 100%;
+  min-height: 80px;
+  max-height: 200px;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: rgba(15, 23, 42, 0.95);
+  color: #e5e7eb;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  outline: none;
+
+  &::placeholder {
+    color: #6b7280;
+  }
+
+  &:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+  }
+
+  @media (max-width: 768px) {
+    font-size: 0.9rem;
+  }
+`;
+
+const FinanceAiActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+`;
+
+const FinanceAiButton = styled.button`
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  color: #f9fafb;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 26px rgba(37, 99, 235, 0.55);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+`;
+
+const FinanceAiError = styled.span`
+  font-size: 0.8rem;
+  color: #fecaca;
+`;
+
+const FinanceAiPreview = styled.div`
+  margin-top: 0.5rem;
+  border-radius: 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.6);
+  padding: 0.55rem 0.6rem;
+  background: rgba(15, 23, 42, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+`;
+
+const FinanceAiPreviewHeader = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem;
+
+  span {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #e5e7eb;
+  }
+`;
+
+const FinanceAiSmallText = styled.span`
+  font-size: 0.75rem;
+  color: #9ca3af;
+`;
+
+const FinanceAiPreviewList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 180px;
+  overflow-y: auto;
+`;
+
+const FinanceAiPreviewItem = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(55, 65, 81, 0.8);
+
+  strong {
+    font-size: 0.85rem;
+    color: #e5e7eb;
+  }
+
+  span {
+    font-size: 0.85rem;
+    color: #e5e7eb;
+    white-space: nowrap;
+  }
+`;
+
+const FinanceAiTypeTag = styled.span<{ $type: "income" | "expense" | "invoice_payment" }>`
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  ${({ $type }) =>
+    $type === "income"
+      ? `
+    background: rgba(22, 163, 74, 0.2);
+    color: #bbf7d0;
+  `
+      : $type === "invoice_payment"
+      ? `
+    background: rgba(129, 140, 248, 0.25);
+    color: #e0e7ff;
+  `
+      : `
+    background: rgba(248, 113, 113, 0.25);
+    color: #fee2e2;
+  `}
+`;
+
+const FinanceAiConfirmButton = styled.button`
+  margin-top: 0.35rem;
+  align-self: flex-end;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ecfdf5;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(22, 163, 74, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 26px rgba(22, 163, 74, 0.55);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 6px 16px rgba(22, 163, 74, 0.4);
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    box-shadow: none;
   }
 `;
 
