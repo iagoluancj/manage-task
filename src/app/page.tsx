@@ -198,7 +198,7 @@ const parseTags = (tagsInput?: Transaction['tags']) => {
         if (Array.isArray(parsed)) {
           return parsed.map((tag) => String(tag).trim()).filter(Boolean);
         }
-      } catch (error) {
+      } catch (_error) {
         // fallback para split
       }
     }

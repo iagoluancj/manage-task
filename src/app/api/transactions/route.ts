@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
             // Se vier apenas a data (YYYY-MM-DD), consideramos meio-dia no horário de Brasília (-03:00)
             const dateOnlyMatch = createdAt.match(/^(\d{4})-(\d{2})-(\d{2})$/);
             if (dateOnlyMatch) {
-                const [_, y, m, d] = dateOnlyMatch;
+                const [, y, m, d] = dateOnlyMatch;
                 const brString = `${y}-${m}-${d}T12:00:00-03:00`;
                 const parsed = new Date(brString);
                 if (!Number.isNaN(parsed.getTime())) {
