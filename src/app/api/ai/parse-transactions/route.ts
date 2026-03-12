@@ -1,8 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-// Groq: configure GROQ_API_KEY no .env.local (dev) e nas variáveis de ambiente da Vercel (prod)
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.3-70b-versatile";
+const APP_SECRETS_TABLE = "app_secrets";
+
+async function getGroqApiKey(): Promise<string | null> {
+  const fromEnv = process.env.GROQ_API_KEY;
+  if (fromEnv?.trim()) return fromEnv.trim();
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_KEY;
+  if (!supabaseUrl || !supabaseKey) return null;
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  const { data, error } = await supabase
+    .from(APP_SECRETS_TABLE)
+    .select("value")
+    .eq("key", "GROQ_API_KEY")
+    .maybeSingle();
+
+  if (error || !data?.value) return null;
+  return String(data.value).trim();
+}
 
 type ParsedTransaction = {
   description: string;
@@ -18,10 +38,10 @@ type AiResponse = {
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey = process.env.GROQ_API_KEY;
+    const apiKey = await getGroqApiKey();
     if (!apiKey) {
       return NextResponse.json(
-        { error: "GROQ_API_KEY não configurada no servidor." },
+        { error: "GROQ_API_KEY não configurada. Defina no .env ou na tabela app_secrets no Supabase." },
         { status: 500 }
       );
     }
