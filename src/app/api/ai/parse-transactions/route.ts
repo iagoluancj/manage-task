@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// IMPORTANTE:
-// - NÃO deixe sua chave exposta no código.
-// - Configure no ambiente: GROQ_API_KEY=...
-//
-// Usando Groq com endpoint compatível com OpenAI
+// Groq: configure GROQ_API_KEY no .env.local (dev) e nas variáveis de ambiente da Vercel (prod)
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.3-70b-versatile";
 
